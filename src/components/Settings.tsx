@@ -1,22 +1,21 @@
-
-import React, { useState } from 'react';
-import { ArrowLeft, Moon, Sun, Type, Eye, ChevronDown, ChevronUp, ShieldCheck, Users, Pill, Database, FileText, ChevronRight, Download } from 'lucide-react';
+import React from 'react';
 import { SettingsState } from '../types';
+import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info } from 'lucide-react';
 
 interface SettingsProps {
   settings: SettingsState;
-  onUpdateSettings: (newSettings: SettingsState) => void;
+  onUpdateSettings: (settings: SettingsState) => void;
   onBack: () => void;
   onOpenTerms: () => void;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, onBack, onOpenTerms }) => {
-  const [expandedSection, setExpandedSection] = useState<string | null>(null);
-
-  const toggleSection = (section: string) => {
-    setExpandedSection(expandedSection === section ? null : section);
-  };
-
+export const Settings: React.FC<SettingsProps> = ({ 
+  settings, 
+  onUpdateSettings, 
+  onBack,
+  onOpenTerms
+}) => {
+  
   const toggleTheme = () => {
     onUpdateSettings({ ...settings, theme: settings.theme === 'light' ? 'dark' : 'light' });
   };
@@ -29,151 +28,156 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
     onUpdateSettings({ ...settings, largeText: !settings.largeText });
   };
 
-  const ManualSection = ({ title, icon: Icon, id, children }: any) => (
-    <div className="border border-borderColor rounded-lg overflow-hidden mb-3 bg-surface">
-      <button 
-        onClick={() => toggleSection(id)}
-        className="w-full flex items-center justify-between p-4 text-left hover:bg-surface-hover transition-colors"
-      >
-        <div className="flex items-center gap-3 text-mainText">
-          <Icon className="w-5 h-5 text-accent" />
-          <span className="font-medium">{title}</span>
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 pb-20">
+      <div className="max-w-2xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6">
+          <button 
+            onClick={onBack}
+            className="p-2 -ml-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900">Application Settings</h1>
         </div>
-        {expandedSection === id ? (
-          <ChevronUp className="w-5 h-5 text-mutedText" />
-        ) : (
-          <ChevronDown className="w-5 h-5 text-mutedText" />
-        )}
-      </button>
-      {expandedSection === id && (
-        <div className="p-4 pt-0 text-mutedText text-sm border-t border-borderColor bg-surface/50">
-          <div className="pt-3 space-y-2">
-            {children}
+
+        {/* --- HOW TO BACKUP GUIDE --- */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-blue-100">
+          <div className="flex items-center gap-3 mb-4 text-blue-800">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Shield className="w-5 h-5" />
+            </div>
+            <h2 className="text-lg font-bold">Data Security & Backup</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+              <h3 className="font-semibold text-blue-900 flex items-center gap-2 mb-2">
+                <Download className="w-4 h-4" />
+                How to Backup
+              </h3>
+              <p className="text-sm text-blue-800/80 leading-relaxed">
+                Click the <strong>Download Icon</strong> <span className="inline-block align-middle"><Download className="w-3 h-3" /></span> in the top-right corner of the dashboard to save a full copy of your medical records. 
+                <br/><br/>
+                <strong>Recommendation:</strong> Do this after every major update. Save the file to a secure cloud drive or USB stick.
+              </p>
+            </div>
+
+            <div className="bg-amber-50/50 rounded-xl p-4 border border-amber-100">
+              <h3 className="font-semibold text-amber-900 flex items-center gap-2 mb-2">
+                <Upload className="w-4 h-4" />
+                How to Restore
+              </h3>
+              <p className="text-sm text-amber-800/80 leading-relaxed">
+                If you clear your browser history or switch devices, you will see a <strong>"Restore from Backup"</strong> option on the initial PIN creation screen. 
+                <br/><br/>
+                Simply upload your backup file there to recover all your data instantly.
+              </p>
+            </div>
           </div>
         </div>
-      )}
-    </div>
-  );
 
-  return (
-    <div className="flex flex-col h-screen bg-primary text-mainText">
-      <div className="p-4 bg-surface flex items-center gap-4 shadow-md z-10 border-b border-borderColor">
-        <button onClick={onBack} className="p-2 -ml-2 text-mutedText hover:text-mainText">
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <h2 className="text-xl font-bold">Settings & Help</h2>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-10">
-        
-        {/* Accessibility & Theme */}
-        <section>
-          <h3 className="text-sm font-bold text-mutedText uppercase tracking-wider mb-3">Appearance</h3>
-          <div className="bg-surface rounded-xl border border-borderColor overflow-hidden">
-            
-            <div className="flex items-center justify-between p-4 border-b border-borderColor">
+        {/* Display Settings */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900 mb-6">Display & Accessibility</h2>
+          
+          <div className="space-y-6">
+            {/* Theme Toggle */}
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                {settings.theme === 'dark' ? <Moon className="w-5 h-5 text-accent" /> : <Sun className="w-5 h-5 text-accent" />}
+                <div className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-indigo-100 text-indigo-600' : 'bg-orange-100 text-orange-600'}`}>
+                  {settings.theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+                </div>
                 <div>
-                  <p className="font-medium text-mainText">App Theme</p>
-                  <p className="text-xs text-mutedText">{settings.theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</p>
+                  <p className="font-medium text-gray-900">App Theme</p>
+                  <p className="text-sm text-gray-500">Switch between light and dark mode</p>
                 </div>
               </div>
               <button 
                 onClick={toggleTheme}
-                className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.theme === 'light' ? 'bg-slate-300' : 'bg-accent'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  settings.theme === 'dark' ? 'bg-indigo-600' : 'bg-gray-200'
+                }`}
               >
-                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.theme === 'light' ? 'translate-x-0' : 'translate-x-6'}`} />
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  settings.theme === 'dark' ? 'translate-x-6' : 'translate-x-1'
+                }`} />
               </button>
             </div>
 
-            <div className="flex items-center justify-between p-4 border-b border-borderColor">
+            {/* High Contrast */}
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Eye className="w-5 h-5 text-accent" />
+                <div className="p-2 bg-gray-100 text-gray-600 rounded-lg">
+                  <Sun className="w-5 h-5" />
+                </div>
                 <div>
-                  <p className="font-medium text-mainText">High Contrast</p>
-                  <p className="text-xs text-mutedText">Increase visual distinction</p>
+                  <p className="font-medium text-gray-900">High Contrast</p>
+                  <p className="text-sm text-gray-500">Increase visual distinction</p>
                 </div>
               </div>
               <button 
                 onClick={toggleContrast}
-                className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.highContrast ? 'bg-accent' : 'bg-slate-600'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  settings.highContrast ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
               >
-                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.highContrast ? 'translate-x-6' : 'translate-x-0'}`} />
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  settings.highContrast ? 'translate-x-6' : 'translate-x-1'
+                }`} />
               </button>
             </div>
 
-            <div className="flex items-center justify-between p-4">
+            {/* Large Text */}
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Type className="w-5 h-5 text-accent" />
+                <div className="p-2 bg-gray-100 text-gray-600 rounded-lg">
+                  <Type className="w-5 h-5" />
+                </div>
                 <div>
-                  <p className="font-medium text-mainText">Large Text</p>
-                  <p className="text-xs text-mutedText">Increase font size</p>
+                  <p className="font-medium text-gray-900">Large Text</p>
+                  <p className="text-sm text-gray-500">Increase font size for readability</p>
                 </div>
               </div>
               <button 
                 onClick={toggleLargeText}
-                className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.largeText ? 'bg-accent' : 'bg-slate-600'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  settings.largeText ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
               >
-                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.largeText ? 'translate-x-6' : 'translate-x-0'}`} />
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  settings.largeText ? 'translate-x-6' : 'translate-x-1'
+                }`} />
               </button>
             </div>
-
           </div>
-        </section>
-
-        {/* User Manual */}
-        <section>
-          <h3 className="text-sm font-bold text-mutedText uppercase tracking-wider mb-3">User Manual</h3>
-          
-          <ManualSection title="Installation" icon={Download} id="install">
-            <p><strong>iOS (Chrome/Safari):</strong> Tap the "Share" icon (box with arrow) in the browser bar, scroll down, and select "Add to Home Screen".</p>
-            <p><strong>Android:</strong> Tap the menu icon (three dots) and select "Install App" or "Add to Home Screen".</p>
-          </ManualSection>
-
-          <ManualSection title="Security & Login" icon={ShieldCheck} id="sec">
-            <p><strong>Zero-Knowledge Architecture:</strong> Your data is encrypted on this device using your 6-digit PIN. We do not have access to your PIN or your data.</p>
-            <p><strong>Master Key:</strong> The app creates a master key when you first sign up. If you lose your PIN, your data cannot be recovered.</p>
-          </ManualSection>
-
-          <ManualSection title="Managing Profiles" icon={Users} id="users">
-            <p><strong>Adding People:</strong> Tap the "+" button on the dashboard to add family members.</p>
-            <p><strong>Editing:</strong> Open a profile and tap the pencil icon in the top right to update medical conditions, insurance, or contact info.</p>
-          </ManualSection>
-
-          <ManualSection title="Medications & Labels" icon={Pill} id="meds">
-            <p><strong>Adding Photos:</strong> Inside a profile, go to the "Meds" tab and tap "Add Med".</p>
-            <p><strong>Label Capture:</strong> Point your camera at a pill bottle to take a photo of the label. This photo is stored securely with the medication record.</p>
-            <p><strong>Manual Entry:</strong> After taking the photo, enter the medication details (Name, Dosage, Frequency) manually.</p>
-          </ManualSection>
-
-          <ManualSection title="Data Privacy" icon={Database} id="privacy">
-            <p><strong>Local Storage:</strong> All photos and text records are stored in an encrypted database on your phone's physical storage.</p>
-            <p><strong>Offline First:</strong> This app works entirely without an internet connection (except for initially loading the web app).</p>
-          </ManualSection>
-
-        </section>
+        </div>
 
         {/* Legal */}
-        <section>
-          <h3 className="text-sm font-bold text-mutedText uppercase tracking-wider mb-3">Legal</h3>
-          <div className="bg-surface rounded-xl border border-borderColor overflow-hidden">
-             <button 
-               onClick={onOpenTerms}
-               className="w-full flex items-center justify-between p-4 hover:bg-surface-hover transition-colors"
-             >
-               <div className="flex items-center gap-3 text-mainText">
-                 <FileText className="w-5 h-5 text-accent" />
-                 <span className="font-medium">Terms of Service</span>
-               </div>
-               <ChevronRight className="w-5 h-5 text-mutedText" />
-             </button>
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">About</h2>
+          <button 
+            onClick={onOpenTerms}
+            className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gray-100 text-gray-600 rounded-lg group-hover:bg-white group-hover:shadow-sm transition-all">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <p className="font-medium text-gray-900">Terms & Privacy Policy</p>
+                <p className="text-xs text-gray-500">Read our legal documentation</p>
+              </div>
+            </div>
+            <div className="text-gray-400">→</div>
+          </button>
+          
+          <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2 text-xs text-gray-400">
+             <Info className="w-4 h-4" />
+             <p>Family Care Hub v1.0.0 • Local Offline Storage</p>
           </div>
-        </section>
-
-        <div className="text-center text-xs text-mutedText pt-8">
-          <p>Family Care Hub v1.1.0</p>
-          <p>&copy; 2025 Secure Health Systems</p>
         </div>
 
       </div>
