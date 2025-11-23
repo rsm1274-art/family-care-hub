@@ -71,9 +71,9 @@ export const Settings: React.FC<SettingsProps> = ({
                 How to Restore
               </h3>
               <p className="text-sm text-amber-800/80 leading-relaxed">
-                If you clear your browser history or switch devices, you will see a <strong>"Restore from Backup"</strong> option on the initial PIN creation screen. 
+                If you clear your browser history or switch devices, you will see a <strong>"Restore from Backup"</strong> option on the initial PIN creation screen.
                 <br/><br/>
-                Simply upload your backup file there to recover all your data instantly.
+                <strong>Note:</strong> During restoration, you will be required to create a Master PIN again to secure the application. You may safely use your previous PIN or create a new one.
               </p>
             </div>
           </div>
