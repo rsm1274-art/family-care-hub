@@ -1,10 +1,14 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 
-// This component renders the Terms of Service and Privacy Statement for the Family Care Hub application.
-// It is styled using Tailwind CSS for readability and responsiveness.
+// This component renders the Terms of Service and Privacy Statement.
+// UPDATED: Uses standard window navigation to avoid build errors.
 const Terms: React.FC = () => {
-  const navigate = useNavigate();
+  
+  // We use this simple function to go back to the home page
+  const goHome = () => {
+    // This sends the user back to your main GitHub Pages folder
+    window.location.href = '/family-care-hub/';
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
@@ -13,7 +17,7 @@ const Terms: React.FC = () => {
         
         {/* --- BACK BUTTON --- */}
         <button 
-          onClick={() => navigate('/')}
+          onClick={goHome}
           className="mb-6 flex items-center text-blue-600 hover:text-blue-800 font-semibold transition-colors"
         >
           <span className="mr-2">←</span> Back to Home
