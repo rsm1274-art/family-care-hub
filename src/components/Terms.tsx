@@ -143,4 +143,4 @@ const Terms: React.FC = () => {
   );
 };
 
-export default Terms;
+export { Terms };
