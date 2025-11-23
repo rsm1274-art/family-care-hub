@@ -1,13 +1,24 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // This component renders the Terms of Service and Privacy Statement for the Family Care Hub application.
 // It is styled using Tailwind CSS for readability and responsiveness.
 const Terms: React.FC = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       {/* Container for content - centered and constrained for readability */}
       <div className="max-w-4xl mx-auto bg-white shadow-xl rounded-2xl p-6 sm:p-10">
         
+        {/* --- BACK BUTTON --- */}
+        <button 
+          onClick={() => navigate('/')}
+          className="mb-6 flex items-center text-blue-600 hover:text-blue-800 font-semibold transition-colors"
+        >
+          <span className="mr-2">←</span> Back to Home
+        </button>
+
         <header className="mb-8 border-b pb-4">
           <h1 className="text-3xl sm:text-4xl font-extrabold text-blue-700">
             Family Care Hub Policies
