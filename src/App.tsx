@@ -7,7 +7,7 @@ import { Scanner } from './components/Scanner';
 import { Settings } from './components/Settings';
 import { Terms } from './components/Terms';
 import { X, Save, Camera, Trash2, Maximize2, Download } from 'lucide-react';
-import * as QRCode from 'qrcode.react';
+import QRCode from 'qrcode.react';
 import { generateOneTimeAccessLink } from './services/accessService';
 
 // Storage Keys
