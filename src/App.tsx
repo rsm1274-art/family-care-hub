@@ -8,7 +8,7 @@ import { Settings } from './components/Settings';
 import { Terms } from './components/Terms';
 import { X, Save, Camera, Trash2, Maximize2, Download } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { generateOneTimeAccessLink } from '@/services/accessService';
+import { generateOneTimeAccessLink } from './services/accessService';
 
 // Storage Keys
 const STORAGE_KEY_PEOPLE = 'fch_secure_people';
