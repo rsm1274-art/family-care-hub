@@ -7,7 +7,7 @@ import { Scanner } from './components/Scanner';
 import { Settings } from './components/Settings';
 import { Terms } from './components/Terms';
 import { X, Save, Camera, Trash2, Maximize2, Download } from 'lucide-react';
-import QRCode from 'qrcode.react';
+import { QRCodeSVG } from 'qrcode.react';
 import { generateOneTimeAccessLink } from './services/accessService';
 
 // Storage Keys
@@ -659,7 +659,7 @@ const App: React.FC = () => {
           {/* Emergency QR Code */}
           <div className="mb-3">
             <h3 className="text-sm font-semibold text-mainText mb-2">Emergency QR Code</h3>
-            <QRCode value={handleGenerateEmergencyQR()} size={128} />
+            <QRCodeSVG value={handleGenerateEmergencyQR()} size={128} />
           </div>
 
           {/* Share Access Button */}
