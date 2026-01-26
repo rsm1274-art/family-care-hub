@@ -7,6 +7,8 @@ import { Scanner } from './components/Scanner';
 import { Settings } from './components/Settings';
 import { Terms } from './components/Terms';
 import { X, Save, Camera, Trash2, Maximize2, Download } from 'lucide-react';
+import QRCode from 'qrcode.react';
+import { generateOneTimeAccessLink } from './services/accessService';
 
 // Storage Keys
 const STORAGE_KEY_PEOPLE = 'fch_secure_people';
@@ -292,6 +294,21 @@ const App: React.FC = () => {
     setShowPersonForm(false);
     setEditingId(null);
     setFormData(INITIAL_FORM_STATE);
+  };
+
+  const handleGenerateEmergencyQR = () => {
+    const emergencyData = {
+      name: state.people[0]?.name || 'Unknown',
+      dob: state.people[0]?.dob || 'Unknown',
+      medications: state.medications,
+      emergencyContact: state.people[0]?.physicianContact || 'Unknown',
+    };
+    return JSON.stringify(emergencyData);
+  };
+
+  const handleShareAccess = (personId) => {
+    const link = generateOneTimeAccessLink(personId);
+    alert(`Share this link with the caregiver: ${link}`);
   };
 
   // --- Renders ---
@@ -631,6 +648,25 @@ const App: React.FC = () => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Emergency QR Code & Share Access */}
+      {state.view === ViewState.PERSON_DETAIL && activePerson && (
+        <div className="absolute top-4 right-4 z-50 bg-surface/80 p-4 rounded-lg border border-borderColor shadow-md backdrop-blur-sm">
+          {/* Emergency QR Code */}
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold text-mainText mb-2">Emergency QR Code</h3>
+            <QRCode value={handleGenerateEmergencyQR()} size={128} />
+          </div>
+
+          {/* Share Access Button */}
+          <button 
+            onClick={() => handleShareAccess(state.activePersonId)}
+            className="w-full bg-accent text-white font-bold py-2 rounded-lg hover:opacity-90 transition-colors flex items-center justify-center gap-2"
+          >
+            <Save className="w-4 h-4" /> Share Access
+          </button>
         </div>
       )}
     </div>

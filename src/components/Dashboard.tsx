@@ -12,6 +12,12 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ people, onAddPerson, onSelectPerson, onOpenSettings }) => {
   return (
     <div className="p-4 space-y-6 pb-24">
+      {/* Emergency Summary */}
+      <div className="emergency-summary bg-red-100 p-4 rounded-lg">
+        <h3 className="text-lg font-bold">Emergency Summary</h3>
+        <p className="text-sm">Ensure all critical information is up-to-date and accessible.</p>
+      </div>
+
       <header className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-bold text-mainText">Family Care Hub</h2>

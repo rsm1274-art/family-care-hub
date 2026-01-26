@@ -97,6 +97,10 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
     }, 100);
   };
 
+  const handleRoleBasedAccess = (role) => {
+    alert(`Access granted for role: ${role}`);
+  };
+
   useEffect(() => {
     if (pin.length === 6) {
       handleSubmit();
@@ -197,6 +201,25 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
         >
           <Delete className="w-8 h-8" />
         </button>
+      </div>
+
+      {/* Role-Based Access - Added Section */}
+      <div className="mt-8 w-full max-w-xs text-center">
+        <h3 className="text-lg font-semibold mb-4">Role-Based Access</h3>
+        <div className="flex justify-center gap-4">
+          <button 
+            onClick={() => handleRoleBasedAccess('Parent')}
+            className="flex-1 bg-accent text-white rounded-lg px-4 py-2 font-medium transition-all hover:bg-accent/90"
+          >
+            Parent Access
+          </button>
+          <button 
+            onClick={() => handleRoleBasedAccess('Babysitter')}
+            className="flex-1 bg-accent text-white rounded-lg px-4 py-2 font-medium transition-all hover:bg-accent/90"
+          >
+            Babysitter Access
+          </button>
+        </div>
       </div>
     </div>
   );

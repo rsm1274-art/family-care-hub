@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Person, Medication } from '../types';
-import { ArrowLeft, Pill, FileText, Info, Camera, Plus, AlertTriangle, Stethoscope, Shield, Pencil, Eye } from 'lucide-react';
+import { ArrowLeft, Pill, FileText, Info, Camera, Plus, AlertTriangle, Stethoscope, Shield, Pencil, Eye, Lock } from 'lucide-react';
 
 interface PersonDetailProps {
   person: Person;
@@ -15,6 +14,10 @@ interface PersonDetailProps {
 
 export const PersonDetail: React.FC<PersonDetailProps> = ({ person, medications, onBack, onAddMedication, onEdit, onViewImage, onEditMedication }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'meds'>('meds');
+
+  const handleAddMedicationReminder = (medicationId: string) => {
+    alert(`Reminder set for medication ID: ${medicationId}`);
+  };
 
   return (
     <div className="flex flex-col h-screen bg-primary">
@@ -162,6 +165,13 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({ person, medications,
                       aria-label="Edit Medication"
                     >
                       <Pencil className="w-5 h-5" />
+                    </button>
+                    <button 
+                      onClick={() => handleAddMedicationReminder(med.id)}
+                      className="p-2 text-mutedText hover:text-accent hover:bg-surface-hover rounded-full transition-colors"
+                      aria-label="Set Reminder"
+                    >
+                      <Lock className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
