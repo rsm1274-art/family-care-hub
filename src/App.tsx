@@ -313,7 +313,9 @@ const App: React.FC = () => {
 
   // --- Renders ---
 
-  if (state.view === ViewState.LOCKED) {
+  const isViewLocked = state.view === ViewState.LOCKED;
+
+  if (isViewLocked) {
     return <PinPad onUnlock={handleUnlock} />;
   }
 
@@ -351,7 +353,7 @@ const App: React.FC = () => {
       
       {/* --- GLOBAL BACKUP BUTTON --- */}
       {/* Positioned absolute top-right, visible in Dashboard & Details */}
-      {state.view !== ViewState.LOCKED && (
+      {!isViewLocked && (
         <button
           onClick={handleBackup}
           className="absolute top-4 right-16 z-50 p-2 bg-surface/80 hover:bg-surface border border-borderColor rounded-full text-accent shadow-sm backdrop-blur-sm transition-all hover:scale-105"
@@ -486,8 +488,6 @@ const App: React.FC = () => {
                   value={medFormData.frequency}
                   onChange={handleMedInputChange}
                   className="w-full bg-surface-hover border border-borderColor rounded-lg p-3 text-mainText focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  placeholder="e.g. Once daily"
-                />
               </div>
               <button 
                 type="submit"

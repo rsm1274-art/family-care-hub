@@ -1,15 +1,12 @@
 import React from 'react';
 
+interface TermsProps {
+  onBack: () => void;
+}
+
 // This component renders the Terms of Service and Privacy Statement.
 // UPDATED: Uses standard window navigation to avoid build errors.
-const Terms: React.FC = () => {
-  
-  // We use this simple function to go back to the home page
-  const goHome = () => {
-    // This sends the user back to your main GitHub Pages folder
-    window.location.href = '/family-care-hub/';
-  };
-
+const Terms: React.FC<TermsProps> = ({ onBack }) => {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       {/* Container for content - centered and constrained for readability */}
@@ -17,10 +14,10 @@ const Terms: React.FC = () => {
         
         {/* --- BACK BUTTON --- */}
         <button 
-          onClick={goHome}
+          onClick={onBack}
           className="mb-6 flex items-center text-blue-600 hover:text-blue-800 font-semibold transition-colors"
         >
-          <span className="mr-2">←</span> Back to Home
+          <span className="mr-2">←</span> Back
         </button>
 
         <header className="mb-8 border-b pb-4">
