@@ -7,7 +7,7 @@ import { Scanner } from './components/Scanner';
 import { Settings } from './components/Settings';
 import { Terms } from './components/Terms';
 import { X, Save, Camera, Trash2, Maximize2, Download } from 'lucide-react';
-import QRCode from 'qrcode.react';
+import * as QRCode from 'qrcode.react';
 import { generateOneTimeAccessLink } from './services/accessService';
 
 // Storage Keys
@@ -488,6 +488,8 @@ const App: React.FC = () => {
                   value={medFormData.frequency}
                   onChange={handleMedInputChange}
                   className="w-full bg-surface-hover border border-borderColor rounded-lg p-3 text-mainText focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  placeholder="e.g. Once daily"
+                />
               </div>
               <button 
                 type="submit"
