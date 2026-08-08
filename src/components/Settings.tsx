@@ -1,24 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { SettingsState } from '../types';
 import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info, AlertTriangle } from 'lucide-react';
-import { LAST_BACKUP_KEY } from '../App';
 
 interface SettingsProps {
   settings: SettingsState;
   onUpdateSettings: (settings: SettingsState) => void;
   onBack: () => void;
   onOpenTerms: () => void;
+  /** ISO timestamp of the last export, or null if there has never been one. */
+  lastBackup: string | null;
 }
 
 export const Settings: React.FC<SettingsProps> = ({ 
   settings, 
   onUpdateSettings, 
   onBack,
-  onOpenTerms
+  onOpenTerms,
+  lastBackup
 }) => {
-  const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
+  // Captured once per mount rather than read during render: the clock is an
+  // impure source, and this panel does not need it to tick.
+  const [now] = useState(() => Date.now());
   const backupAgeDays = lastBackup
-    ? (Date.now() - new Date(lastBackup).getTime()) / 86_400_000
+    ? (now - new Date(lastBackup).getTime()) / 86_400_000
     : Infinity;
   const backupIsStale = backupAgeDays > 30;
 

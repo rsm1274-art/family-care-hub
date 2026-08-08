@@ -61,6 +61,12 @@ const App: React.FC = () => {
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const [showRecovery, setShowRecovery] = useState(false);
 
+  // Held here rather than read inside Settings, which would make that component
+  // impure. Lazy initialiser so the read happens once, not on every render.
+  const [lastBackup, setLastBackup] = useState<string | null>(
+    () => localStorage.getItem(LAST_BACKUP_KEY),
+  );
+
   // Apply global theme classes
   useEffect(() => {
     const root = document.documentElement;
@@ -98,13 +104,17 @@ const App: React.FC = () => {
     if (state.view === ViewState.LOCKED || !cryptoService.isUnlocked()) return;
 
     const generation = ++saveGeneration.current;
+    let cancelled = false;
 
     (async () => {
       try {
         const sealedPeople = await sealSecure(state.people);
         const sealedMeds = await sealSecure(state.medications);
 
-        if (generation !== saveGeneration.current) return; // superseded
+        // Superseded by a newer save, or unmounted mid-encrypt. Writing now
+        // would put stale ciphertext on disk under a key that may no longer
+        // be the session key.
+        if (cancelled || generation !== saveGeneration.current) return;
 
         commitSealed(STORAGE_KEY_PEOPLE, sealedPeople);
         commitSealed(STORAGE_KEY_MEDS, sealedMeds);
@@ -112,6 +122,8 @@ const App: React.FC = () => {
         console.error("Failed to save to local storage", e);
       }
     })();
+
+    return () => { cancelled = true; };
   }, [state.people, state.medications, state.view]);
 
   // Decrypt records on unlock. Pre-encryption plaintext is read transparently
@@ -203,7 +215,9 @@ const App: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
+    const stampedAt = new Date().toISOString();
+    localStorage.setItem(LAST_BACKUP_KEY, stampedAt);
+    setLastBackup(stampedAt);
 
     // Optional: Show a tiny alert or toast
     alert("Backup saved to your Downloads folder!");
@@ -426,6 +440,7 @@ const App: React.FC = () => {
         onUpdateSettings={handleUpdateSettings}
         onBack={() => setState(prev => ({ ...prev, view: ViewState.DASHBOARD }))}
         onOpenTerms={() => setState(prev => ({ ...prev, view: ViewState.TERMS }))}
+        lastBackup={lastBackup}
       />
     );
   }
