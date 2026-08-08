@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 import App from './App';
 import { cryptoService } from './services/cryptoService';
 import { isEncrypted, saveSecure } from './services/secureStorage';
+import { seedV1Vault } from './services/testSupport';
 import type { Person } from './types';
 
 const STORAGE_KEY_PEOPLE = 'fch_secure_people';
@@ -105,4 +106,64 @@ describe('App data-at-rest wiring', () => {
     expect(screen.queryByText(/Ada Lovelace/)).toBeNull();
     expect(localStorage.getItem(STORAGE_KEY_PEOPLE)).toBe(corrupted);
   });
+});
+
+describe('App recovery wiring', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    cryptoService.lock();
+    alertMock.mockClear();
+    window.alert = alertMock;
+  });
+  afterEach(cleanup);
+
+  it('shows the recovery code after first-time setup', async () => {
+    render(<App />);
+    enterPin(PIN); // create
+    await waitFor(() => expect(screen.getByText(/confirm|re-enter/i)).toBeTruthy(), {
+      timeout: 10000,
+    }).catch(() => {}); // heading wording is not the assertion
+    enterPin(PIN); // confirm
+
+    await waitFor(() => expect(screen.getByText(/save your recovery code/i)).toBeTruthy(), {
+      timeout: 15000,
+    });
+    expect(screen.getByText(/^[0-9A-Z]{4}(-[0-9A-Z]{4}){7}$/)).toBeTruthy();
+  }, 30000);
+
+  // The Phase 1 regression this task exists to close: a v1 user could see the
+  // unlock screen but never actually get in, because unlock() reads a v2 vault.
+  it('lets a v1 user in with their existing PIN', async () => {
+    await seedV1Vault(PIN, { [STORAGE_KEY_PEOPLE]: [ADA] });
+
+    render(<App />);
+    enterPin(PIN);
+
+    await waitFor(() => expect(screen.getByText(/save your recovery code/i)).toBeTruthy(), {
+      timeout: 15000,
+    });
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY_PEOPLE)!).v).toBe(2);
+  }, 30000);
+
+  it('rejects a wrong PIN on a v1 vault without destroying data', async () => {
+    await seedV1Vault(PIN, { [STORAGE_KEY_PEOPLE]: [ADA] });
+    const before = localStorage.getItem(STORAGE_KEY_PEOPLE);
+
+    render(<App />);
+    enterPin('999999');
+
+    await waitFor(() => expect(screen.getByText(/invalid pin/i)).toBeTruthy(), {
+      timeout: 15000,
+    });
+    expect(localStorage.getItem(STORAGE_KEY_PEOPLE)).toBe(before);
+  }, 30000);
+
+  it('offers a forgot-PIN route to recovery', async () => {
+    await cryptoService.setupPin(PIN);
+    cryptoService.lock();
+
+    render(<App />);
+    fireEvent.click(screen.getByText(/forgot your pin/i));
+    expect(screen.getByLabelText(/recovery code/i)).toBeTruthy();
+  }, 30000);
 });

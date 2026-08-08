@@ -12,6 +12,9 @@ import { QRCodeSVG } from 'qrcode.react';
 import { generateOneTimeAccessLink } from './services/accessService';
 import { cryptoService, VAULT_KEYS } from './services/cryptoService';
 import { loadSecure, sealSecure, commitSealed } from './services/secureStorage';
+import { needsMigration, migrateToV2 } from './services/migrateVault';
+import { RecoveryCodeModal } from './components/RecoveryCodeModal';
+import { RecoverAccess } from './components/RecoverAccess';
 
 // Storage Keys
 const STORAGE_KEY_PEOPLE = 'fch_secure_people';
@@ -49,6 +52,11 @@ const App: React.FC = () => {
       largeText: false
     }
   });
+
+  // Set after setup, migration, or recovery; cleared once the user confirms
+  // they have saved it. Never persisted.
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
 
   // Apply global theme classes
   useEffect(() => {
@@ -105,7 +113,28 @@ const App: React.FC = () => {
 
   // Decrypt records on unlock. Pre-encryption plaintext is read transparently
   // and sealed by the save effect that this state change triggers.
-  const handleUnlock = async () => {
+  const handleUnlock = async (pin: string, wasSetup: boolean): Promise<boolean> => {
+    if (wasSetup) {
+      // App owns setupPin because it returns the recovery code to display.
+      setRecoveryCode(await cryptoService.setupPin(pin));
+    } else if (needsMigration()) {
+      try {
+        setRecoveryCode(await migrateToV2(pin, [STORAGE_KEY_PEOPLE, STORAGE_KEY_MEDS]));
+      } catch (e) {
+        // Wrong PIN is by far the likeliest cause; either way migrateToV2 is
+        // all-or-nothing, so storage is untouched. PinPad shows the error.
+        console.error("Migration failed", e);
+        cryptoService.lock();
+        return false;
+      }
+    }
+
+    return loadRecords();
+  };
+
+  // Shared by the unlock path and by recovery, which also lands with an open
+  // vault but a still-locked view.
+  const loadRecords = async (): Promise<boolean> => {
     let loadedPeople: Person[] = [];
     let loadedMeds: Medication[] = [];
 
@@ -124,7 +153,7 @@ const App: React.FC = () => {
         "Your data could not be decrypted and has been left untouched. " +
         "Reload and try again, or restore from a backup."
       );
-      return;
+      return false;
     }
 
     setState(prev => ({
@@ -133,6 +162,14 @@ const App: React.FC = () => {
       people: loadedPeople,
       medications: loadedMeds
     }));
+    return true;
+  };
+
+  // The code is shown once. Dismissing it is what actually opens the app on
+  // the recovery path, where the view is still locked.
+  const handleRecoveryCodeSaved = async () => {
+    setRecoveryCode(null);
+    if (state.view === ViewState.LOCKED) await loadRecords();
   };
 
   // --- GLOBAL BACKUP FUNCTION ---
@@ -350,8 +387,23 @@ const App: React.FC = () => {
 
   const isViewLocked = state.view === ViewState.LOCKED;
 
+  // Outranks everything, including the dashboard: after setup or a migration
+  // the vault is already open and the view has moved on, but the code still
+  // has to be seen exactly once.
+  if (recoveryCode) {
+    return <RecoveryCodeModal code={recoveryCode} onConfirmed={handleRecoveryCodeSaved} />;
+  }
+
   if (isViewLocked) {
-    return <PinPad onUnlock={handleUnlock} />;
+    if (showRecovery) {
+      return (
+        <RecoverAccess
+          onRecovered={(code) => { setShowRecovery(false); setRecoveryCode(code); }}
+          onCancel={() => setShowRecovery(false)}
+        />
+      );
+    }
+    return <PinPad onUnlock={handleUnlock} onForgotPin={() => setShowRecovery(true)} />;
   }
 
   if (state.view === ViewState.SCAN_MEDICATION) {

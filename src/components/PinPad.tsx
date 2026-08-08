@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { cryptoService } from '../services/cryptoService';
+import { needsMigration } from '../services/migrateVault';
 import { Lock, ShieldCheck, Delete, AlertTriangle, Upload } from 'lucide-react';
 
 interface PinPadProps {
-  onUnlock: () => void;
+  /**
+   * `wasSetup` is true when this call created the vault, so App knows to run
+   * setupPin and surface the recovery code rather than treating it as an
+   * ordinary unlock. Resolves false when the PIN was not accepted -- App
+   * verifies it itself on the migration path, where unlock() cannot.
+   */
+  onUnlock: (pin: string, wasSetup: boolean) => Promise<boolean>;
+  onForgotPin: () => void;
 }
 
-export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
+export const PinPad: React.FC<PinPadProps> = ({ onUnlock, onForgotPin }) => {
   const [pin, setPin] = useState<string>('');
   const [isSetupMode, setIsSetupMode] = useState<boolean>(!cryptoService.isSetup());
   const [confirmPin, setConfirmPin] = useState<string | null>(null);
@@ -69,22 +77,26 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
             setPin('');
             setLoading(false);
             return;
-          } else {
-            if (pin === confirmPin) {
-              await cryptoService.setupPin(pin);
-              setIsSetupMode(false);
-              onUnlock();
-            } else {
-              setError("PINs do not match. Try again.");
-              setConfirmPin(null);
-              setPin('');
-            }
           }
+          if (pin !== confirmPin) {
+            setError("PINs do not match. Try again.");
+            setConfirmPin(null);
+            setPin('');
+            return;
+          }
+          // App owns setupPin: it returns the recovery code, which has to be
+          // displayed, and this component has nowhere to put it.
+          setIsSetupMode(false);
+          await onUnlock(pin, true);
         } else {
-          const isValid = await cryptoService.unlock(pin);
-          if (isValid) {
-            onUnlock();
-          } else {
+          // On a v1 vault unlock() always fails -- there is no v2 pin slot yet.
+          // App migrates instead, and the migration verifies the PIN itself.
+          if (!needsMigration() && !(await cryptoService.unlock(pin))) {
+            setError("Invalid PIN.");
+            setPin('');
+            return;
+          }
+          if (!(await onUnlock(pin, false))) {
             setError("Invalid PIN.");
             setPin('');
           }
@@ -206,6 +218,12 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
           <Delete className="w-8 h-8" />
         </button>
       </div>
+
+      {!isSetupMode && (
+        <button onClick={onForgotPin} className="mt-4 text-sm text-mutedText underline">
+          Forgot your PIN?
+        </button>
+      )}
 
       {/* Role-Based Access - Added Section */}
       <div className="mt-8 w-full max-w-xs text-center">
