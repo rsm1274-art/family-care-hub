@@ -1,6 +1,7 @@
 import React from 'react';
 import type { SettingsState } from '../types';
-import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info } from 'lucide-react';
+import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info, AlertTriangle } from 'lucide-react';
+import { LAST_BACKUP_KEY } from '../App';
 
 interface SettingsProps {
   settings: SettingsState;
@@ -15,7 +16,12 @@ export const Settings: React.FC<SettingsProps> = ({
   onBack,
   onOpenTerms
 }) => {
-  
+  const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
+  const backupAgeDays = lastBackup
+    ? (Date.now() - new Date(lastBackup).getTime()) / 86_400_000
+    : Infinity;
+  const backupIsStale = backupAgeDays > 30;
+
   const toggleTheme = () => {
     onUpdateSettings({ ...settings, theme: settings.theme === 'light' ? 'dark' : 'light' });
   };
@@ -55,15 +61,33 @@ export const Settings: React.FC<SettingsProps> = ({
           </div>
           
           <div className="space-y-4">
+            {backupIsStale && (
+              <div className="flex gap-3 rounded-xl border border-danger/40 bg-danger/10 p-4">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+                <p className="text-sm text-mainText">
+                  Your data lives only on this device. If you lose it, these records
+                  cannot be recovered. Export a backup.
+                </p>
+              </div>
+            )}
+
+            <p className="text-sm text-mutedText">
+              {lastBackup
+                ? `Last backup: ${new Date(lastBackup).toLocaleDateString()}`
+                : 'You have never backed up'}
+            </p>
+
             <div className="bg-blue-500/5 rounded-xl p-4 border border-blue-500/20">
               <h3 className="font-semibold text-blue-500 flex items-center gap-2 mb-2">
                 <Download className="w-4 h-4" />
                 How to Backup
               </h3>
               <p className="text-sm text-mainText/80 leading-relaxed">
-                Click the <strong>Download Icon</strong> <span className="inline-block align-middle"><Download className="w-3 h-3" /></span> in the top-right corner of the dashboard to save a full copy of your medical records. 
+                Click the <strong>Download Icon</strong> <span className="inline-block align-middle"><Download className="w-3 h-3" /></span> in the top-right corner of the dashboard to save a full copy of your medical records.
                 <br/><br/>
-                <strong>Recommendation:</strong> Do this after every major update. Save the file to a secure cloud drive or USB stick.
+                The file is <strong>encrypted</strong> — it can only be opened with your PIN, so it is safe to store on a cloud drive or USB stick.
+                <br/><br/>
+                <strong>Recommendation:</strong> Do this after every major update.
               </p>
             </div>
 
@@ -75,7 +99,7 @@ export const Settings: React.FC<SettingsProps> = ({
               <p className="text-sm text-mainText/80 leading-relaxed">
                 If you clear your browser history or switch devices, you will see a <strong>"Restore from Backup"</strong> option on the initial PIN creation screen.
                 <br/><br/>
-                <strong>Note:</strong> During restoration, you will be required to create a Master PIN again to secure the application. You may safely use your previous PIN or create a new one.
+                <strong>Important:</strong> a restored backup can only be opened with the PIN that was in use when the backup was taken. Choosing a different PIN will not work, because the file is encrypted with the original one.
               </p>
             </div>
           </div>

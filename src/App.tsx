@@ -17,6 +17,9 @@ import { RecoveryCodeModal } from './components/RecoveryCodeModal';
 import { RecoverAccess } from './components/RecoverAccess';
 
 // Storage Keys
+// Exported: Settings reads it to warn when the only copy of the data has no
+// recent backup.
+export const LAST_BACKUP_KEY = 'fch_last_backup';
 const STORAGE_KEY_PEOPLE = 'fch_secure_people';
 const STORAGE_KEY_MEDS = 'fch_secure_meds';
 
@@ -200,6 +203,7 @@ const App: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
 
     // Optional: Show a tiny alert or toast
     alert("Backup saved to your Downloads folder!");
