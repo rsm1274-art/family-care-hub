@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # The toolchain went ~4 months stale and accumulated 6 advisories before
+  # anyone noticed. Weekly grouped PRs keep that from recurring silently.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the build toolchain, which is where the advisories were.
+      dev-dependencies:
+        dependency-type: "development"
+      # Runtime deps ship to users, so keep them in a separate PR that gets
+      # reviewed on its own rather than buried in a toolchain bump.
+      production-dependencies:
+        dependency-type: "production"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

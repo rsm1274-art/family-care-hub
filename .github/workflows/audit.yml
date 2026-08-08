@@ -1,0 +1,31 @@
+name: Security Audit
+
+# Deliberately NOT a step in deploy.yml. A new advisory in a build-time
+# devDependency should page us, not block a production deploy of a bundle
+# that does not contain the vulnerable package.
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Audit production dependencies
+        # These ship to users. Any advisory here is worth acting on.
+        run: npm audit --omit=dev --audit-level=low
+      - name: Audit all dependencies
+        run: npm audit --audit-level=high
