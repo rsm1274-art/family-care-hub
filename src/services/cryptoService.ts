@@ -3,6 +3,8 @@
 // There is no recovery path by design: lose the PIN and the data is
 // permanently unreadable, which is what the PinPad "NO RECOVERY" notice means.
 
+import { toBase64, fromBase64 } from './base64';
+
 const SALT_KEY = 'secure_health_salt';
 const VALIDATION_KEY = 'secure_health_validation';
 
@@ -14,28 +16,6 @@ export const VAULT_KEYS = [SALT_KEY, VALIDATION_KEY];
 // In-memory only. Cleared by lock() and lost on reload, so every session
 // starts at the PIN prompt.
 let sessionKey: CryptoKey | null = null;
-
-// Base64 rather than Array.from(bytes).toString(): medication photos are
-// already base64, and a byte-array encoding would inflate the ciphertext ~4x
-// and threaten the ~5MB localStorage quota.
-const toBase64 = (bytes: Uint8Array): string => {
-  let binary = '';
-  // Chunked to avoid blowing the argument limit on large payloads.
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-};
-
-const fromBase64 = (value: string): Uint8Array => {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-};
 
 export const cryptoService = {
   // Derive an AES-GCM key from the PIN. 100k PBKDF2 iterations over SHA-256.
