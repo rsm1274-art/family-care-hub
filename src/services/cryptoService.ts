@@ -1,147 +1,126 @@
-// Local-only vault. The AES-256-GCM key is derived from the user's PIN via
-// PBKDF2 and held in memory for the session only -- it is never persisted.
-// There is no recovery path by design: lose the PIN and the data is
-// permanently unreadable, which is what the PinPad "NO RECOVERY" notice means.
+// Local-only vault. A random 256-bit DEK encrypts every record; the DEK is
+// stored twice over, wrapped once by a key derived from the PIN and once by a
+// key derived from the 160-bit recovery code. Changing the PIN re-wraps the
+// DEK rather than re-encrypting records, so it is instant.
+//
+// The DEK lives in memory for the session only and is never persisted. There
+// is no recovery path beyond the recovery code by design: nothing leaves this
+// device, so there is no server to ask.
 
 import { toBase64, fromBase64 } from './base64';
+import { generateDek, wrapDek, unwrapDek, readVault, writeVault } from './vault';
+import { generateRecoveryCode, normalizeRecoveryCode } from './recoveryCode';
+import { VAULT_STORAGE_KEY, type VaultDescriptor } from './vaultTypes';
 
-const SALT_KEY = 'secure_health_salt';
-const VALIDATION_KEY = 'secure_health_validation';
+// Legacy v1 keys. Retained so isSetup() and the migration can detect old vaults.
+export const LEGACY_SALT_KEY = 'secure_health_salt';
+export const LEGACY_VALIDATION_KEY = 'secure_health_validation';
 
-// A backup must carry these or the restored ciphertext is undecryptable: a new
-// PIN generates a new salt, hence a different key. Neither is secret -- the
-// salt is public by design and the validation token is itself encrypted.
-export const VAULT_KEYS = [SALT_KEY, VALIDATION_KEY];
+// A backup must carry these or the restored ciphertext is undecryptable.
+// None is secret: the salt is public by design, the v1 validation token is
+// itself encrypted, and the vault descriptor holds only wrapped keys.
+export const VAULT_KEYS = [VAULT_STORAGE_KEY, LEGACY_SALT_KEY, LEGACY_VALIDATION_KEY];
 
-// In-memory only. Cleared by lock() and lost on reload, so every session
-// starts at the PIN prompt.
-let sessionKey: CryptoKey | null = null;
+// In-memory only; lost on reload, so every session starts at the PIN prompt.
+let sessionDek: CryptoKey | null = null;
+
+const requireUnlocked = (action: string): CryptoKey => {
+  if (!sessionDek) throw new Error(`Vault is locked; cannot ${action}.`);
+  return sessionDek;
+};
 
 export const cryptoService = {
-  // Derive an AES-GCM key from the PIN. 100k PBKDF2 iterations over SHA-256.
-  deriveKey: async (pin: string, salt: Uint8Array): Promise<CryptoKey> => {
-    const encoder = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(pin),
-      { name: "PBKDF2" },
-      false,
-      ["deriveBits", "deriveKey"]
-    );
+  /** Creates the vault and returns the recovery code. Shown once, never stored. */
+  setupPin: async (pin: string): Promise<string> => {
+    const dek = await generateDek();
+    const recoveryCode = generateRecoveryCode();
 
-    return crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: salt,
-        iterations: 100000,
-        hash: "SHA-256",
+    const descriptor: VaultDescriptor = {
+      v: 2,
+      slots: {
+        pin: await wrapDek(dek, pin),
+        recovery: await wrapDek(dek, normalizeRecoveryCode(recoveryCode)),
       },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      true,
-      ["encrypt", "decrypt"]
-    );
-  },
-
-  // Setup a new PIN
-  setupPin: async (pin: string): Promise<void> => {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    // Store salt strictly for derivation (not secret)
-    localStorage.setItem(SALT_KEY, Array.from(salt).toString());
-
-    // Create a validation token to check login success without storing PIN
-    const key = await cryptoService.deriveKey(pin, salt);
-    const validationData = new TextEncoder().encode("VALID");
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-
-    const encryptedValidation = await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv: iv },
-      key,
-      validationData
-    );
-
-    // Store IV and encrypted validation token
-    localStorage.setItem(VALIDATION_KEY, JSON.stringify({
-      iv: Array.from(iv),
-      data: Array.from(new Uint8Array(encryptedValidation))
-    }));
+    };
+    writeVault(descriptor);
 
     // Setup leaves the vault open so the first session can write immediately.
-    sessionKey = key;
+    sessionDek = dek;
+    return recoveryCode;
   },
 
-  // Validate PIN
   unlock: async (pin: string): Promise<boolean> => {
-    const saltStr = localStorage.getItem(SALT_KEY);
-    const validationStr = localStorage.getItem(VALIDATION_KEY);
-
-    if (!saltStr || !validationStr) return false;
-
+    const slot = readVault()?.slots.pin;
+    if (!slot) return false;
     try {
-      const salt = new Uint8Array(saltStr.split(',').map(Number));
-      const validation = JSON.parse(validationStr);
-      const iv = new Uint8Array(validation.iv);
-      const data = new Uint8Array(validation.data);
-
-      const key = await cryptoService.deriveKey(pin, salt);
-
-      const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: iv },
-        key,
-        data
-      );
-
-      const result = new TextDecoder().decode(decrypted);
-      if (result !== "VALID") return false;
-
-      sessionKey = key;
+      sessionDek = await unwrapDek(slot, pin);
       return true;
     } catch {
-      return false; // Decryption failed = Wrong PIN
+      return false; // wrong PIN
     }
   },
 
-  // Drop the in-memory key. Data on disk stays encrypted and unreadable.
+  unlockWithRecovery: async (code: string): Promise<boolean> => {
+    const slot = readVault()?.slots.recovery;
+    if (!slot) return false;
+    try {
+      sessionDek = await unwrapDek(slot, normalizeRecoveryCode(code));
+      return true;
+    } catch {
+      return false; // wrong code
+    }
+  },
+
+  // Re-wraps the DEK only. Records are never touched, so this stays instant
+  // even with megabytes of medication photos stored.
+  changePin: async (newPin: string): Promise<void> => {
+    const dek = requireUnlocked('change the PIN');
+    const descriptor = readVault();
+    if (!descriptor) throw new Error('No vault to update.');
+    writeVault({ ...descriptor, slots: { ...descriptor.slots, pin: await wrapDek(dek, newPin) } });
+  },
+
+  regenerateRecoveryCode: async (): Promise<string> => {
+    const dek = requireUnlocked('regenerate the recovery code');
+    const descriptor = readVault();
+    if (!descriptor) throw new Error('No vault to update.');
+    const code = generateRecoveryCode();
+    writeVault({
+      ...descriptor,
+      slots: { ...descriptor.slots, recovery: await wrapDek(dek, normalizeRecoveryCode(code)) },
+    });
+    return code;
+  },
+
   lock: (): void => {
-    sessionKey = null;
+    sessionDek = null;
   },
 
-  isUnlocked: (): boolean => sessionKey !== null,
+  isUnlocked: (): boolean => sessionDek !== null,
 
-  isSetup: (): boolean => {
-    return !!localStorage.getItem(VALIDATION_KEY);
-  },
+  // The legacy check is included so a v1 user is not dropped into setup mode
+  // and left unable to reach their data.
+  isSetup: (): boolean =>
+    readVault()?.slots.pin !== undefined || !!localStorage.getItem(LEGACY_VALIDATION_KEY),
 
   encrypt: async (plaintext: string): Promise<string> => {
-    if (!sessionKey) throw new Error('Vault is locked; cannot encrypt.');
-
+    const dek = requireUnlocked('encrypt');
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const sealed = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      sessionKey,
-      new TextEncoder().encode(plaintext)
+      { name: 'AES-GCM', iv }, dek, new TextEncoder().encode(plaintext),
     );
-
-    return JSON.stringify({
-      v: 1,
-      iv: toBase64(iv),
-      data: toBase64(new Uint8Array(sealed)),
-    });
+    return JSON.stringify({ v: 2, iv: toBase64(iv), data: toBase64(new Uint8Array(sealed)) });
   },
 
   // Throws on a wrong key or tampered payload -- GCM authenticates, so this
   // never silently returns garbage. Callers must treat a throw as "do not
   // overwrite what is on disk".
   decrypt: async (sealed: string): Promise<string> => {
-    if (!sessionKey) throw new Error('Vault is locked; cannot decrypt.');
-
+    const dek = requireUnlocked('decrypt');
     const envelope = JSON.parse(sealed);
     const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromBase64(envelope.iv) },
-      sessionKey,
-      fromBase64(envelope.data)
+      { name: 'AES-GCM', iv: fromBase64(envelope.iv) }, dek, fromBase64(envelope.data),
     );
-
     return new TextDecoder().decode(plaintext);
   },
 };

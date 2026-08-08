@@ -10,6 +10,7 @@ export const isEncrypted = (raw: string): boolean => {
       parsed !== null &&
       typeof parsed === 'object' &&
       !Array.isArray(parsed) &&
+      (parsed.v === 1 || parsed.v === 2) &&
       typeof parsed.iv === 'string' &&
       typeof parsed.data === 'string'
     );
