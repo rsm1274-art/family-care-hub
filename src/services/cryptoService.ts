@@ -77,7 +77,7 @@ export const cryptoService = {
 
       const result = new TextDecoder().decode(decrypted);
       return result === "VALID";
-    } catch (e) {
+    } catch {
       return false; // Decryption failed = Wrong PIN
     }
   },

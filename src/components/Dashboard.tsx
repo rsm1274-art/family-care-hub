@@ -1,5 +1,5 @@
 import React from 'react';
-import { Person } from '../types';
+import type { Person } from '../types';
 import { Plus, User, ChevronRight, Settings } from 'lucide-react';
 
 interface DashboardProps {

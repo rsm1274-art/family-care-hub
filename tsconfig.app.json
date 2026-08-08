@@ -20,7 +20,8 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
+    /* Not enabled: `erasableSyntaxOnly` forbids `enum`, and ViewState in
+       src/types.ts is an enum used as a runtime value. */
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },

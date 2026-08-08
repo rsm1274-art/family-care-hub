@@ -1,5 +1,5 @@
 import React from 'react';
-import { SettingsState } from '../types';
+import type { SettingsState } from '../types';
 import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info } from 'lucide-react';
 
 interface SettingsProps {

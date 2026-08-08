@@ -7,21 +7,13 @@ interface ScannerProps {
 }
 
 export const Scanner: React.FC<ScannerProps> = ({ onResult, onCancel }) => {
-  const [cameraActive, setCameraActive] = useState(true);
+  const [, setCameraActive] = useState(true);
   const [cameraError, setCameraError] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Start Camera on Mount
-  useEffect(() => {
-    startCamera();
-    return () => {
-      stopCamera();
-    };
-  }, []);
 
   const startCamera = async () => {
     try {
@@ -48,6 +40,15 @@ export const Scanner: React.FC<ScannerProps> = ({ onResult, onCancel }) => {
     }
     setCameraActive(false);
   };
+
+  // Start Camera on Mount. Declared after startCamera/stopCamera so the effect
+  // closes over the current definitions rather than reading them before init.
+  useEffect(() => {
+    startCamera();
+    return () => {
+      stopCamera();
+    };
+  }, []);
 
   const handleCapture = () => {
     if (videoRef.current && canvasRef.current) {

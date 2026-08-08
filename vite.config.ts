@@ -1,10 +1,8 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig(({ mode }) => {
-    // We keep loadEnv just in case you use other environment variables
-    const env = loadEnv(mode, '.', ''); 
+export default defineConfig(() => {
     return {
       server: {
         port: 3000,

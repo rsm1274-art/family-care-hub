@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, ViewState, Person, Medication, SettingsState } from './types';
+import { ViewState } from './types';
+import type { AppState, Person, Medication, SettingsState } from './types';
 import { PinPad } from './components/PinPad';
 import { Dashboard } from './components/Dashboard';
 import { PersonDetail } from './components/PersonDetail';
@@ -306,7 +307,7 @@ const App: React.FC = () => {
     return JSON.stringify(emergencyData);
   };
 
-  const handleShareAccess = (personId) => {
+  const handleShareAccess = (personId: string) => {
     const link = generateOneTimeAccessLink(personId);
     alert(`Share this link with the caregiver: ${link}`);
   };
@@ -664,7 +665,7 @@ const App: React.FC = () => {
 
           {/* Share Access Button */}
           <button 
-            onClick={() => handleShareAccess(state.activePersonId)}
+            onClick={() => handleShareAccess(activePerson.id)}
             className="w-full bg-accent text-white font-bold py-2 rounded-lg hover:opacity-90 transition-colors flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" /> Share Access

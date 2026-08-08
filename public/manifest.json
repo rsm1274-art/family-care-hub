@@ -1,7 +1,8 @@
 {
   "name": "Family Care Hub",
   "short_name": "CareHub",
-  "start_url": ".",
+  "start_url": "/family-care-hub/",
+  "scope": "/family-care-hub/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",

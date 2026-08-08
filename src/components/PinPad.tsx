@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { cryptoService } from '../services/cryptoService';
-import { Lock, Unlock, ShieldCheck, Delete, AlertTriangle, Upload } from 'lucide-react';
+import { Lock, ShieldCheck, Delete, AlertTriangle, Upload } from 'lucide-react';
 
 interface PinPadProps {
   onUnlock: () => void;
@@ -41,7 +41,7 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
         // 3. Reload to initialize crypto service with restored keys
         alert("Backup restored successfully! The application will now reload.");
         window.location.reload();
-      } catch (error) {
+      } catch {
         setError("Failed to restore. Invalid backup file.");
       }
     };
@@ -89,7 +89,7 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
             setPin('');
           }
         }
-      } catch (e) {
+      } catch {
         setError("Security Error.");
       } finally {
         setLoading(false);
@@ -97,10 +97,14 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
     }, 100);
   };
 
-  const handleRoleBasedAccess = (role) => {
+  const handleRoleBasedAccess = (role: string) => {
     alert(`Access granted for role: ${role}`);
   };
 
+  // TODO: auto-submit belongs in handleNumberClick, not an effect (see
+  // react.dev/learn/you-might-not-need-an-effect). Moving it means threading the
+  // submitted PIN through handleSubmit instead of reading it from closure, which
+  // touches the unlock path and needs manual testing of both setup and unlock.
   useEffect(() => {
     if (pin.length === 6) {
       handleSubmit();

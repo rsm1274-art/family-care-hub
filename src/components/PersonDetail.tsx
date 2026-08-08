@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Person, Medication } from '../types';
-import { ArrowLeft, Pill, FileText, Info, Camera, Plus, AlertTriangle, Stethoscope, Shield, Pencil, Eye, Lock } from 'lucide-react';
+import type { Person, Medication } from '../types';
+import { ArrowLeft, Pill, Info, Plus, AlertTriangle, Stethoscope, Shield, Pencil, Eye, Lock } from 'lucide-react';
 
 interface PersonDetailProps {
   person: Person;
