@@ -297,12 +297,15 @@ const App: React.FC = () => {
     setFormData(INITIAL_FORM_STATE);
   };
 
-  const handleGenerateEmergencyQR = () => {
+  // Takes the person explicitly: this is rendered on the active person's detail
+  // page, but previously read state.people[0] and every medication in the app,
+  // so it showed the wrong name and leaked other people's medications.
+  const handleGenerateEmergencyQR = (person: Person) => {
     const emergencyData = {
-      name: state.people[0]?.name || 'Unknown',
-      dob: state.people[0]?.dob || 'Unknown',
-      medications: state.medications,
-      emergencyContact: state.people[0]?.physicianContact || 'Unknown',
+      name: person.name || 'Unknown',
+      dob: person.dob || 'Unknown',
+      medications: state.medications.filter(m => m.personId === person.id),
+      emergencyContact: person.physicianContact || 'Unknown',
     };
     return JSON.stringify(emergencyData);
   };
@@ -660,7 +663,7 @@ const App: React.FC = () => {
           {/* Emergency QR Code */}
           <div className="mb-3">
             <h3 className="text-sm font-semibold text-mainText mb-2">Emergency QR Code</h3>
-            <QRCodeSVG value={handleGenerateEmergencyQR()} size={128} />
+            <QRCodeSVG value={handleGenerateEmergencyQR(activePerson)} size={128} />
           </div>
 
           {/* Share Access Button */}
