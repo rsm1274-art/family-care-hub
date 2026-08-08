@@ -1,17 +1,19 @@
-# End-to-End Encrypted Recovery & Sync Implementation Plan
+# Offline PIN Recovery Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give Family Care Hub users a recovery path for a forgotten PIN and multi-device recoverable data, without ever letting the server read a medical record.
+**Goal:** Give Family Care Hub users a recovery path for a forgotten PIN, with every byte of medical data staying on the user's own device and no backend of any kind.
 
-**Architecture:** Records stop being encrypted directly by a PIN-derived key. A random 256-bit Data Encryption Key (DEK) encrypts all records; the DEK is stored several times over, each copy wrapped by a different Key Encryption Key (KEK). `KEK_pin` is derived from the 6-digit PIN and never leaves the device. `KEK_recovery` is derived from a 160-bit recovery code shown once at setup, and its wrapped copy is safe to sync. Firestore stores record ciphertext plus the recovery slot only, so a short PIN is never remotely brute-forceable.
+**Architecture:** Records stop being encrypted directly by a PIN-derived key. A random 256-bit Data Encryption Key (DEK) encrypts all records; the DEK is stored twice over, each copy wrapped by a different Key Encryption Key (KEK). `KEK_pin` is derived from the 6-digit PIN; `KEK_recovery` is derived from a 160-bit recovery code shown once at setup. Forgetting the PIN means unwrapping the DEK with the recovery code and re-wrapping it under a new PIN. Because the DEK is only ever re-wrapped, changing a PIN never touches a record.
 
-**Tech Stack:** TypeScript, React 19, Vite 6, Web Crypto (PBKDF2 + AES-GCM), Firebase Auth + Firestore, vitest + @testing-library/react, happy-dom.
+**Tech Stack:** TypeScript, React 19, Vite 6, Web Crypto (PBKDF2 + AES-GCM), vitest + @testing-library/react, happy-dom. **No backend, no network calls, no new runtime dependencies.**
+
+> **Scope note:** An earlier draft of this plan carried a third phase adding Firebase Auth + Firestore sync. It was cut deliberately. PIN recovery needs no server — the recovery code wraps a second DEK copy stored beside the first — and holding no user data avoids breach-notification exposure (including the FTC Health Breach Notification Rule, which covers consumer health apps outside HIPAA), special-category data handling, and BAA questions entirely. The tradeoff is accepted and addressed in Task 9: with no cloud copy, a lost device means lost data unless the user has exported an encrypted backup.
 
 ## Global Constraints
 
-- The server must never be able to decrypt a record. No plaintext, no DEK, and no PIN-wrapped material may be written to Firestore.
-- `KEK_pin` material (the `pin` slot) is **device-local only**. A 6-digit PIN is ~20 bits of entropy and is brute-forceable in about a minute on one GPU if its wrapped DEK is ever obtainable offline.
+- **No data leaves the device.** No network calls, no telemetry, no analytics, no remote logging. If a task seems to need a server, it is out of scope.
+- A 6-digit PIN is ~20 bits of entropy and is brute-forceable in roughly a minute on one GPU by anyone holding the device. This is inherent and not solved here; it is why no wrapped-DEK material may ever be transmitted or uploaded.
 - PBKDF2-SHA256 at **600,000 iterations** for all new KEK derivations (current OWASP guidance). The legacy v1 vault used 100,000; migration must not silently keep the old figure.
 - All random values come from `crypto.getRandomValues`. Never `Math.random`.
 - AES-GCM only, 256-bit keys, a fresh 12-byte IV per encryption. Never reuse an IV under the same key.
@@ -22,28 +24,27 @@
 
 ## Phase Boundaries
 
-The three phases are sequentially dependent, not independent subsystems, so they share one plan. Each phase still ends with working, shippable software and is a natural review-and-stop point:
+The two phases are sequentially dependent, not independent subsystems, so they share one plan. Each ends with working, shippable software and is a natural review-and-stop point:
 
-- **Phase 1 (Tasks 1–5)** — DEK/KEK vault + v1→v2 migration. Ships local encryption with instant PIN change. No Firebase.
-- **Phase 2 (Tasks 6–8)** — Recovery code generation, display, and unlock-by-recovery. Ships forgotten-PIN recovery. Still no Firebase.
-- **Phase 3 (Tasks 9–12)** — Firebase Auth, Firestore schema and rules, encrypted sync.
+- **Phase 1 (Tasks 1–5)** — DEK/KEK vault + v1→v2 migration. Ships stronger local encryption and instant PIN change. No user-visible feature yet.
+- **Phase 2 (Tasks 6–10)** — Recovery code generation, display, unlock-by-recovery, backup prominence, and honest documentation. Ships forgotten-PIN recovery.
 
 ## File Structure
 
 | File | Responsibility |
 |---|---|
 | `src/services/vaultTypes.ts` (create) | Shared vault/envelope types and version constants. No logic. |
-| `src/services/base64.ts` (create) | `toBase64` / `fromBase64`, extracted from `cryptoService` so vault and sync can share them. |
+| `src/services/base64.ts` (create) | `toBase64` / `fromBase64`, extracted from `cryptoService` so `vault` can share them. |
 | `src/services/recoveryCode.ts` (create) | Generate, format, and normalize the 160-bit recovery code. |
 | `src/services/vault.ts` (create) | DEK generation, KEK derivation, slot wrap/unwrap, descriptor read/write. |
 | `src/services/migrateVault.ts` (create) | One-way v1 → v2 upgrade. |
-| `src/services/cryptoService.ts` (modify) | Session DEK holder. Public surface stays `setupPin`/`unlock`/`lock`/`isUnlocked`/`isSetup`/`encrypt`/`decrypt`, plus new `changePin`/`unlockWithRecovery`. |
+| `src/services/testSupport.ts` (create) | `seedV1Vault` helper shared by the migration and App tests. |
+| `src/services/cryptoService.ts` (modify) | Session DEK holder. Public surface stays `setupPin`/`unlock`/`lock`/`isUnlocked`/`isSetup`/`encrypt`/`decrypt`, plus new `changePin`/`unlockWithRecovery`/`regenerateRecoveryCode`. |
 | `src/services/secureStorage.ts` (modify) | Unchanged API; `isEncrypted` accepts v1 and v2 envelopes. |
 | `src/components/RecoveryCodeModal.tsx` (create) | Shows the code once, requires explicit confirmation. |
 | `src/components/RecoverAccess.tsx` (create) | Recovery-code entry and new-PIN flow. |
-| `src/services/sync/firebaseApp.ts` (create) | Firebase initialization from env vars. |
-| `src/services/sync/vaultSync.ts` (create) | Push/pull of ciphertext + recovery slot. |
-| `firestore.rules` (create) | Per-user access rules. |
+| `src/components/Settings.tsx` (modify) | Backup prominence and staleness warning (Task 9). |
+| `README.md` (modify) | Correct the security claims (Task 10). |
 
 ---
 
@@ -491,7 +492,6 @@ git commit -m "feat: add DEK/KEK vault with multi-slot key wrapping"
   - `lock(): void`, `isUnlocked(): boolean`, `isSetup(): boolean`
   - `encrypt(plaintext: string): Promise<string>` — emits `v: 2`.
   - `decrypt(sealed: string): Promise<string>`
-  - `getRecoverySlot(): VaultSlot | null` — used by Phase 3 sync.
 
 `isSetup()` must return true for a v1 vault too, or existing users get dropped into setup mode and lose their data. It therefore checks the v2 descriptor **or** the legacy `secure_health_validation` key.
 
@@ -606,7 +606,7 @@ Expected: FAIL — `cryptoService.unlockWithRecovery is not a function`.
 import { toBase64, fromBase64 } from './base64';
 import { generateDek, wrapDek, unwrapDek, readVault, writeVault } from './vault';
 import { generateRecoveryCode, normalizeRecoveryCode } from './recoveryCode';
-import type { VaultDescriptor, VaultSlot } from './vaultTypes';
+import type { VaultDescriptor } from './vaultTypes';
 
 // Legacy v1 keys. Retained so isSetup() and the migration can detect old vaults.
 export const LEGACY_SALT_KEY = 'secure_health_salt';
@@ -682,8 +682,6 @@ export const cryptoService = {
     });
     return code;
   },
-
-  getRecoverySlot: (): VaultSlot | null => readVault()?.slots.recovery ?? null,
 
   lock: (): void => {
     sessionDek = null;
@@ -1425,335 +1423,217 @@ git commit -m "feat: wire recovery code and v1 migration into the unlock flow"
 
 ---
 
-## Phase 3 — Firebase Encrypted Sync
-
-### Task 9: Firebase project setup and env wiring
+### Task 9: Make the encrypted backup prominent
 
 **Files:**
-- Create: `src/services/sync/firebaseApp.ts`
-- Create: `.env.example`
-- Modify: `.gitignore` (add `.env.local`)
-- Modify: `README.md` (setup section)
+- Modify: `src/components/Settings.tsx`
+- Modify: `src/App.tsx` (record and expose the last-backup timestamp)
+- Create: `src/components/Settings.test.tsx`
 
 **Interfaces:**
-- Produces: `getFirebase(): { app: FirebaseApp; auth: Auth; db: Firestore } | null` — returns `null` when env vars are absent, so the app still runs fully offline and the existing tests need no Firebase mock.
+- Consumes: `cryptoService` (Task 4).
+- Produces: `const LAST_BACKUP_KEY = 'fch_last_backup'` exported from `src/App.tsx`.
 
-- [ ] **Step 1: Install dependencies**
+With no cloud copy, an exported backup is the **only** thing standing between a dropped phone and permanently lost medical records. The existing backup button is buried in Settings with no indication of whether it has ever been used. This task makes the gap visible.
 
-```bash
-npm install firebase
-```
-
-- [ ] **Step 2: Create `.env.example`**
-
-```
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
-VITE_FIREBASE_PROJECT_ID=
-VITE_FIREBASE_APP_ID=
-```
-
-Add `.env.local` to `.gitignore`. Note the Firebase web API key is not a secret — it identifies the project, and Firestore rules plus App Check are what actually enforce access.
-
-- [ ] **Step 3: Implement `firebaseApp.ts`**
-
-```typescript
-// src/services/sync/firebaseApp.ts
-import { initializeApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
-
-let cached: { app: FirebaseApp; auth: Auth; db: Firestore } | null | undefined;
-
-export const getFirebase = () => {
-  if (cached !== undefined) return cached;
-
-  const config = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  };
-
-  // Absent config means offline-only mode; sync is simply unavailable.
-  if (!config.apiKey || !config.projectId) {
-    cached = null;
-    return cached;
-  }
-
-  const app = initializeApp(config);
-  cached = { app, auth: getAuth(app), db: getFirestore(app) };
-  return cached;
-};
-```
-
-- [ ] **Step 4: Verify the build still passes without env vars**
-
-Run: `npm test && npm run build`
-Expected: all PASS, build exit 0, and `getFirebase()` returns `null`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add package.json package-lock.json src/services/sync/firebaseApp.ts .env.example .gitignore README.md
-git commit -m "feat: add optional Firebase initialization"
-```
-
----
-
-### Task 10: Firestore schema and security rules
-
-**Files:**
-- Create: `firestore.rules`
-- Create: `firestore.indexes.json`
-- Create: `firebase.json`
-
-**Schema** — one document per user:
-
-```
-users/{uid}/vault/state
-  {
-    v: 2,
-    recoverySlot: { salt, iv, wrappedDek, iterations },   // safe: 160-bit secret
-    records: {
-      people:      { v: 2, iv, data },                    // ciphertext only
-      medications: { v: 2, iv, data }
-    },
-    updatedAt: <server timestamp>
-  }
-```
-
-The `pin` slot is deliberately absent. Uploading it would expose a ~20-bit secret to offline attack.
-
-- [ ] **Step 1: Write the rules**
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId}/vault/{document} {
-      allow read, write: if request.auth != null
-                         && request.auth.uid == userId
-                         // The PIN slot must never be persisted server-side:
-                         // a 6-digit PIN is offline-brute-forceable in minutes.
-                         && (!request.resource.data.keys().hasAny(['pinSlot']));
-    }
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
-```
-
-- [ ] **Step 2: Test the rules locally**
-
-```bash
-npx firebase emulators:start --only firestore
-```
-
-Verify manually: an unauthenticated read of `users/abc/vault/state` is denied; a read as uid `abc` succeeds; a read as uid `xyz` is denied; a write containing a `pinSlot` field is denied.
-
-- [ ] **Step 3: Deploy the rules**
-
-```bash
-npx firebase deploy --only firestore:rules
-```
-
-- [ ] **Step 4: Enable App Check**
-
-In the Firebase console, register the site with reCAPTCHA v3 and set Firestore to enforce App Check. This stops the public API key being used to hammer the backend from elsewhere.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add firestore.rules firestore.indexes.json firebase.json
-git commit -m "feat: add Firestore schema and per-user security rules"
-```
-
----
-
-### Task 11: Vault sync
-
-**Files:**
-- Create: `src/services/sync/vaultSync.ts`
-- Create: `src/services/sync/vaultSync.test.ts`
-
-**Interfaces:**
-- Consumes: `getFirebase` (Task 9); `cryptoService.getRecoverySlot` (Task 4); `readVault`/`writeVault`/`unwrapDek` (Task 3).
-- Produces:
-  - `pushVault(uid: string, records: Record<string, string>): Promise<void>` — uploads ciphertext plus the recovery slot. **Throws if any value is not a v2 envelope**, as a last line of defence against uploading plaintext.
-  - `pullVault(uid: string): Promise<{ recoverySlot: VaultSlot; records: Record<string, string>; updatedAt: number } | null>`
-  - `restoreFromCloud(uid: string, recoveryCode: string, newPin: string): Promise<void>` — pulls, unwraps the DEK with the code, writes a local v2 vault with a fresh `pin` slot, and stores the record ciphertext.
-
-Mock `firebase/firestore` in the test with `vi.mock`; this task tests the guard logic and the restore path, not Firestore itself.
+Requirements:
+1. `handleBackup` writes `localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString())` after a successful export.
+2. Settings shows "Last backup: <relative time>" or "You have never backed up".
+3. When there is no backup, or the last one is older than 30 days, show a warning-styled callout with the `AlertTriangle` icon reading: "Your data lives only on this device. If you lose it, these records cannot be recovered. Export a backup."
+4. The callout is not dismissible — it disappears only by taking a backup.
 
 - [ ] **Step 1: Write the failing test**
 
 ```typescript
-// src/services/sync/vaultSync.test.ts
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { pushVault, restoreFromCloud } from './vaultSync';
-import { cryptoService } from '../cryptoService';
-import { readVault } from '../vault';
+// src/components/Settings.test.tsx
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
+import { Settings } from './Settings';
+import { LAST_BACKUP_KEY } from '../App';
 
-const store = new Map<string, unknown>();
-vi.mock('firebase/firestore', () => ({
-  doc: (_db: unknown, path: string) => ({ path }),
-  getDoc: async (ref: { path: string }) => ({
-    exists: () => store.has(ref.path),
-    data: () => store.get(ref.path),
-  }),
-  setDoc: async (ref: { path: string }, data: unknown) => { store.set(ref.path, data); },
-  serverTimestamp: () => Date.now(),
-  getFirestore: () => ({}),
-}));
-vi.mock('./firebaseApp', () => ({ getFirebase: () => ({ app: {}, auth: {}, db: {} }) }));
+const NOOP = () => {};
+const SETTINGS = { theme: 'dark' as const, highContrast: false, largeText: false };
 
-describe('vaultSync', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    store.clear();
-    cryptoService.lock();
+const renderSettings = () =>
+  render(
+    <Settings
+      settings={SETTINGS}
+      onUpdate={NOOP}
+      onBack={NOOP}
+      onBackup={NOOP}
+      onShowTerms={NOOP}
+    />,
+  );
+
+describe('Settings backup prominence', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(cleanup);
+
+  it('warns when no backup has ever been taken', () => {
+    renderSettings();
+    expect(screen.getByText(/never backed up/i)).toBeTruthy();
+    expect(screen.getByText(/cannot be recovered/i)).toBeTruthy();
   });
 
-  it('refuses to upload anything that is not a v2 envelope', async () => {
-    await cryptoService.setupPin('123456');
-    await expect(
-      pushVault('uid-1', { people: JSON.stringify([{ name: 'Ada' }]) }),
-    ).rejects.toThrow(/envelope/i);
+  it('warns when the last backup is older than 30 days', () => {
+    const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    localStorage.setItem(LAST_BACKUP_KEY, old);
+    renderSettings();
+    expect(screen.getByText(/cannot be recovered/i)).toBeTruthy();
   });
 
-  it('never uploads the pin slot', async () => {
-    await cryptoService.setupPin('123456');
-    await pushVault('uid-1', { people: await cryptoService.encrypt('[]') });
-    expect(JSON.stringify([...store.values()])).not.toContain('pinSlot');
-  });
-
-  it('restores onto a clean device with the recovery code', async () => {
-    const code = await cryptoService.setupPin('123456');
-    const sealed = await cryptoService.encrypt(JSON.stringify([{ name: 'Ada' }]));
-    await pushVault('uid-1', { people: sealed });
-
-    localStorage.clear();          // simulate a new device
-    cryptoService.lock();
-
-    await restoreFromCloud('uid-1', code, '555555');
-
-    expect(readVault()!.slots.pin).toBeTruthy();
-    expect(await cryptoService.unlock('555555')).toBe(true);
-    expect(JSON.parse(await cryptoService.decrypt(localStorage.getItem('fch_secure_people')!)))
-      .toEqual([{ name: 'Ada' }]);
-  });
-
-  it('rejects restore with a wrong recovery code', async () => {
-    await cryptoService.setupPin('123456');
-    await pushVault('uid-1', { people: await cryptoService.encrypt('[]') });
-    localStorage.clear();
-    cryptoService.lock();
-
-    await expect(
-      restoreFromCloud('uid-1', 'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2345-6789', '555555'),
-    ).rejects.toThrow();
-    expect(readVault()).toBeNull();
+  it('shows no warning after a recent backup', () => {
+    localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
+    renderSettings();
+    expect(screen.queryByText(/cannot be recovered/i)).toBeNull();
+    expect(screen.getByText(/last backup/i)).toBeTruthy();
   });
 });
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npx vitest run src/services/sync/vaultSync.test.ts`
-Expected: FAIL — cannot resolve `./vaultSync`.
+Run: `npx vitest run src/components/Settings.test.tsx`
+Expected: FAIL — `LAST_BACKUP_KEY` is not exported from `../App`, and no warning text exists.
 
 - [ ] **Step 3: Implement**
 
-Key guard in `pushVault`, before any network call:
+In `src/App.tsx`, add the export and stamp it on a successful backup:
 
 ```typescript
-for (const [name, value] of Object.entries(records)) {
-  let envelope: unknown;
-  try { envelope = JSON.parse(value); } catch { throw new Error(`Record "${name}" is not a v2 envelope.`); }
-  const e = envelope as { v?: number; iv?: string; data?: string };
-  if (e?.v !== 2 || typeof e.iv !== 'string' || typeof e.data !== 'string') {
-    throw new Error(`Record "${name}" is not a v2 envelope; refusing to upload.`);
-  }
-}
+export const LAST_BACKUP_KEY = 'fch_last_backup';
 ```
 
-`restoreFromCloud` pulls the doc, calls `unwrapDek(recoverySlot, normalizeRecoveryCode(code))` (which throws on a wrong code, before anything is written), then `writeVault({ v: 2, slots: { pin: await wrapDek(dek, newPin), recovery: recoverySlot } })` and writes each record to `localStorage`.
+At the end of `handleBackup`, after `document.body.removeChild(link)`:
+
+```typescript
+localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
+```
+
+In `src/components/Settings.tsx`, above the existing backup button:
+
+```tsx
+const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
+const backupAgeDays = lastBackup
+  ? (Date.now() - new Date(lastBackup).getTime()) / 86_400_000
+  : Infinity;
+const backupIsStale = backupAgeDays > 30;
+
+{backupIsStale && (
+  <div className="mb-4 flex gap-3 rounded-lg border border-danger/40 bg-danger/10 p-3">
+    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+    <p className="text-sm text-mainText">
+      Your data lives only on this device. If you lose it, these records cannot be
+      recovered. Export a backup.
+    </p>
+  </div>
+)}
+
+<p className="mb-2 text-sm text-mutedText">
+  {lastBackup
+    ? `Last backup: ${new Date(lastBackup).toLocaleDateString()}`
+    : 'You have never backed up'}
+</p>
+```
+
+Import `AlertTriangle` from `lucide-react` and `LAST_BACKUP_KEY` from `../App`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `npx vitest run src/services/sync/vaultSync.test.ts`
-Expected: PASS — 4 tests.
+Run: `npx vitest run src/components/Settings.test.tsx`
+Expected: PASS — 3 tests.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Verify the mutation is caught**
+
+Temporarily change `backupAgeDays > 30` to `false`. Re-run: the first two tests must fail. Restore. A staleness warning that cannot be observed to fire is not a warning.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/services/sync/vaultSync.ts src/services/sync/vaultSync.test.ts
-git commit -m "feat: add encrypted vault sync with plaintext upload guard"
+git add src/App.tsx src/components/Settings.tsx src/components/Settings.test.tsx
+git commit -m "feat: warn when the only copy of the data has no recent backup"
 ```
 
 ---
 
-### Task 12: Sign-in, sync UI, and README correction
+### Task 10: Correct the README security claims
 
 **Files:**
-- Modify: `src/components/Settings.tsx` (sync section)
-- Modify: `src/App.tsx` (push after save when signed in)
 - Modify: `README.md`
 
-**Interfaces:**
-- Consumes: Tasks 9–11.
-- Produces: no new exports.
+**Interfaces:** none.
 
-Behaviour: Settings gains a "Cloud sync" section — signed out shows a sign-in button; signed in shows the account email, last-synced time, "Sync now", and "Restore on this device". `App` calls `pushVault` after a successful save when a user is signed in, debounced ~2s so a burst of edits produces one write. Sync failures must surface but never block local saving; local storage stays the source of truth.
+The README describes an app that does not exist. Several claims were false before this work and stay false after it; shipping recovery without fixing them means users make safety decisions on bad information. Each bullet below is either corrected to match the code or deleted.
 
-- [ ] **Step 1: Correct the README**
+- [ ] **Step 1: Replace the false claims**
 
-The current claims are now wrong in both directions. Replace the "No Cloud Storage" bullet:
+| Current claim | Reality | Action |
+|---|---|---|
+| "Local Storage Encryption … AES" | True only after Phase 1 | Keep, and state that the key derives from the PIN via PBKDF2 |
+| "Encryption keys … not exposed" | True — memory only, never persisted | Keep, reword to say the key exists only while unlocked |
+| "Role-Based Access Control", "Granular Permissions" | `handleRoleBasedAccess` is an `alert()` | **Delete** |
+| "One-Time Access Links … expire after a single use" | `btoa()` of `id:timestamp`, reversible, no expiry, no backend | **Delete** |
+| "QR Code Sharing … without compromising security" | QR embeds plaintext name, DOB, medications, contact | Rewrite: the QR is deliberately unencrypted for emergency responders and should only be shown to people trusted with that data |
+| "Lock Screen Widget" | Does not exist | **Delete** |
+| "Tamper Detection … alerts users if data has been modified" | AES-GCM detects tampering but the app only refuses to open; there is no alerting | Rewrite: modified data fails to decrypt and the app refuses to proceed rather than showing corrupted records |
+| "Encrypted backups" | True after `411c729` | Keep |
+| "Encryption in Transit … HTTPS" | Nothing is transmitted | **Delete** |
+| "No Cloud Storage" | True, and now a deliberate design choice | Keep, strengthen |
+| "PINs are hashed and never stored directly" | Not hashed — used to derive a key that unwraps the DEK | Rewrite accurately |
+| "Regular Security Audits" | No audit has occurred | **Delete** |
+
+- [ ] **Step 2: Add the recovery and data-loss sections**
 
 ```markdown
-### Privacy by Design
-- **End-to-end encrypted sync**: Records are encrypted on your device with a key
-  derived from your PIN. Only ciphertext is ever uploaded. Neither we nor Google
-  can read your medical data.
-- **Your PIN never leaves your device.** The cloud copy of your key is protected
-  by your 160-bit recovery code, not by your 6-digit PIN.
-- **Recovery code**: Issued once at setup. It is the only way back into your data
-  if you forget your PIN, and it cannot be reissued without it.
+### Recovery
+- **Recovery code**: A 160-bit code is issued once when you set your PIN. It is the
+  only way back in if you forget the PIN. We cannot reissue or reset it — there is
+  no server and no account, so there is nobody to ask.
+- **Changing your PIN** re-wraps the encryption key, not your records, so it is
+  instant regardless of how many photos you have stored.
+
+### What this app cannot protect you from
+- **Losing the device.** Records exist only here. Export an encrypted backup and
+  keep it somewhere else; that is the only disaster recovery available.
+- **Losing both the PIN and the recovery code.** The data is unrecoverable by
+  design. This is the cost of nobody else holding your key.
+- **Someone who has both your unlocked device and your PIN.** A 6-digit PIN is
+  short by design for one-handed use in an emergency; it is not a defence against
+  a determined attacker who physically holds your device.
 ```
 
-Also correct the claims that were never true: "Regular Security Audits", the one-time-link and QR guarantees, and tamper detection. Delete any the code does not implement.
+- [ ] **Step 3: Remove the AI Studio scaffolding**
 
-- [ ] **Step 2: Implement sign-in and the sync panel**
+Delete the "Run and deploy your AI Studio app" heading, the `ai.studio` link, and the `GEMINI_API_KEY` setup step at the top of the file. That key was removed from `vite.config.ts` and the service it belonged to was deleted.
 
-Use `signInWithPopup` + `GoogleAuthProvider`, or `signInWithEmailAndPassword`. Firebase Auth here establishes *identity only* — it never gates decryption. A user who signs in without the recovery code on a fresh device sees ciphertext they cannot read, which is the intended zero-knowledge behaviour and must be explained in the UI copy.
+- [ ] **Step 4: Verify**
 
-- [ ] **Step 3: Manual verification**
-
-- Sign in on device A, add a person, confirm a Firestore write containing no plaintext (inspect the document in the console).
-- Sign in on device B, use "Restore on this device", enter the recovery code, set a new PIN, confirm the record appears.
-- Confirm the Firestore document contains no `pinSlot` field.
-- Sign out and confirm the app still works fully offline.
-
-- [ ] **Step 4: Run the full suite and build**
-
-Run: `npm test && npm run build && npm run lint`
-Expected: tests PASS, build exit 0. Lint still reports the 2 known pre-existing `set-state-in-effect` errors in PinPad and Scanner unless they are fixed separately.
+Read the finished README top to bottom against `src/`. Every security claim must map to code you can point at. If you cannot point at it, delete the claim.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/Settings.tsx src/App.tsx README.md
-git commit -m "feat: add cloud sync UI and correct README security claims"
+git add README.md
+git commit -m "docs: correct security claims to match what the code does"
 ```
 
 ---
 
 ## Out of Scope
 
-Tracked but deliberately excluded, since neither is needed for recovery or sync:
+Tracked but deliberately excluded, since none is needed for PIN recovery:
 
-- **One-time access links / RBAC.** `generateOneTimeAccessLink` still returns reversible `btoa()` with no expiry, and `handleRoleBasedAccess` is an `alert()`. With a backend these become implementable for the first time — a Cloud Function minting single-use tokens against a short-lived, separately-wrapped subset key — but that is its own plan.
-- **The two `react-hooks/set-state-in-effect` lint errors** in `PinPad.tsx` and `Scanner.tsx`.
-- **HIPAA.** Storing medical records in Firestore raises Business Associate Agreement questions if this is ever used by a covered entity. Firebase is HIPAA-eligible under a BAA on Google Cloud, but not on the Spark plan. Personal family use is not covered by HIPAA at all.
+- **Cloud sync of any kind.** Cut on purpose — see the scope note at the top. Reintroducing it reopens breach-notification and data-handling questions that holding no user data avoids entirely.
+- **One-time access links / RBAC.** `generateOneTimeAccessLink` returns reversible `btoa()` with no expiry, pointing at a domain with no backend, and `handleRoleBasedAccess` is an `alert()`. **A single-use, expiring link is not implementable with no server** — there is nothing to record that a token was spent. Task 10 deletes the README claims rather than pretending otherwise. If the feature is wanted, the honest offline version is a self-contained encrypted QR payload with an embedded expiry the recipient's viewer enforces, which is weaker than it sounds and deserves its own design.
+- **The two `react-hooks/set-state-in-effect` lint errors** in `PinPad.tsx` and `Scanner.tsx`. Both need behavioural refactors of the unlock and camera paths.
+- **Longer PIN / passphrase support.** A 6-digit PIN is ~20 bits and is the ceiling on how well anything here resists an attacker who physically holds the device. Raising it is a UX decision, not a bug fix.
+
+## A note on HIPAA
+
+Not a task, recorded so nobody re-derives it later. HIPAA binds **covered entities** and their business associates. A family storing its own medical information is neither, so HIPAA does not attach to this app in personal use — and that was already true when the data was local, so removing cloud sync did not change it.
+
+It could attach if the app is ever sold or provided to schools, daycares, home-health agencies, or clinics acting as covered entities. The README currently names "schools" as a caregiver role, which is exactly the framing that invites the question.
+
+Separately, and more likely to be relevant: the **FTC Health Breach Notification Rule** was expanded in 2024 to cover consumer health apps that fall *outside* HIPAA. Holding no user data is the cleanest way to stay clear of it, which is a large part of why Phase 3 was cut.
+
+None of this is legal advice; it is context for whoever picks the plan up. Get counsel before going commercial.
