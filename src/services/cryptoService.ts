@@ -1,14 +1,47 @@
-// This service simulates the Zero-Knowledge architecture using Web Crypto API.
-// In a real implementation, this would wrap the Key derivation logic.
+// Local-only vault. The AES-256-GCM key is derived from the user's PIN via
+// PBKDF2 and held in memory for the session only -- it is never persisted.
+// There is no recovery path by design: lose the PIN and the data is
+// permanently unreadable, which is what the PinPad "NO RECOVERY" notice means.
 
 const SALT_KEY = 'secure_health_salt';
 const VALIDATION_KEY = 'secure_health_validation';
 
+// A backup must carry these or the restored ciphertext is undecryptable: a new
+// PIN generates a new salt, hence a different key. Neither is secret -- the
+// salt is public by design and the validation token is itself encrypted.
+export const VAULT_KEYS = [SALT_KEY, VALIDATION_KEY];
+
+// In-memory only. Cleared by lock() and lost on reload, so every session
+// starts at the PIN prompt.
+let sessionKey: CryptoKey | null = null;
+
+// Base64 rather than Array.from(bytes).toString(): medication photos are
+// already base64, and a byte-array encoding would inflate the ciphertext ~4x
+// and threaten the ~5MB localStorage quota.
+const toBase64 = (bytes: Uint8Array): string => {
+  let binary = '';
+  // Chunked to avoid blowing the argument limit on large payloads.
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+};
+
+const fromBase64 = (value: string): Uint8Array => {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+};
+
 export const cryptoService = {
-  // Derive a key from the PIN (PBKDF2 simulation of Argon2)
+  // Derive an AES-GCM key from the PIN. 100k PBKDF2 iterations over SHA-256.
   deriveKey: async (pin: string, salt: Uint8Array): Promise<CryptoKey> => {
     const encoder = new TextEncoder();
-    const keyMaterial = await window.crypto.subtle.importKey(
+    const keyMaterial = await crypto.subtle.importKey(
       "raw",
       encoder.encode(pin),
       { name: "PBKDF2" },
@@ -16,7 +49,7 @@ export const cryptoService = {
       ["deriveBits", "deriveKey"]
     );
 
-    return window.crypto.subtle.deriveKey(
+    return crypto.subtle.deriveKey(
       {
         name: "PBKDF2",
         salt: salt,
@@ -32,16 +65,16 @@ export const cryptoService = {
 
   // Setup a new PIN
   setupPin: async (pin: string): Promise<void> => {
-    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+    const salt = crypto.getRandomValues(new Uint8Array(16));
     // Store salt strictly for derivation (not secret)
     localStorage.setItem(SALT_KEY, Array.from(salt).toString());
 
     // Create a validation token to check login success without storing PIN
     const key = await cryptoService.deriveKey(pin, salt);
     const validationData = new TextEncoder().encode("VALID");
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    
-    const encryptedValidation = await window.crypto.subtle.encrypt(
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    const encryptedValidation = await crypto.subtle.encrypt(
       { name: "AES-GCM", iv: iv },
       key,
       validationData
@@ -52,6 +85,9 @@ export const cryptoService = {
       iv: Array.from(iv),
       data: Array.from(new Uint8Array(encryptedValidation))
     }));
+
+    // Setup leaves the vault open so the first session can write immediately.
+    sessionKey = key;
   },
 
   // Validate PIN
@@ -69,20 +105,63 @@ export const cryptoService = {
 
       const key = await cryptoService.deriveKey(pin, salt);
 
-      const decrypted = await window.crypto.subtle.decrypt(
+      const decrypted = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv: iv },
         key,
         data
       );
 
       const result = new TextDecoder().decode(decrypted);
-      return result === "VALID";
+      if (result !== "VALID") return false;
+
+      sessionKey = key;
+      return true;
     } catch {
       return false; // Decryption failed = Wrong PIN
     }
   },
 
+  // Drop the in-memory key. Data on disk stays encrypted and unreadable.
+  lock: (): void => {
+    sessionKey = null;
+  },
+
+  isUnlocked: (): boolean => sessionKey !== null,
+
   isSetup: (): boolean => {
     return !!localStorage.getItem(VALIDATION_KEY);
-  }
+  },
+
+  encrypt: async (plaintext: string): Promise<string> => {
+    if (!sessionKey) throw new Error('Vault is locked; cannot encrypt.');
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const sealed = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      sessionKey,
+      new TextEncoder().encode(plaintext)
+    );
+
+    return JSON.stringify({
+      v: 1,
+      iv: toBase64(iv),
+      data: toBase64(new Uint8Array(sealed)),
+    });
+  },
+
+  // Throws on a wrong key or tampered payload -- GCM authenticates, so this
+  // never silently returns garbage. Callers must treat a throw as "do not
+  // overwrite what is on disk".
+  decrypt: async (sealed: string): Promise<string> => {
+    if (!sessionKey) throw new Error('Vault is locked; cannot decrypt.');
+
+    const envelope = JSON.parse(sealed);
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: fromBase64(envelope.iv) },
+      sessionKey,
+      fromBase64(envelope.data)
+    );
+
+    return new TextDecoder().decode(plaintext);
+  },
 };

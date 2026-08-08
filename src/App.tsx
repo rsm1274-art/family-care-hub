@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ViewState } from './types';
 import type { AppState, Person, Medication, SettingsState } from './types';
 import { PinPad } from './components/PinPad';
@@ -10,6 +10,8 @@ import { Terms } from './components/Terms';
 import { X, Save, Camera, Trash2, Maximize2, Download } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { generateOneTimeAccessLink } from './services/accessService';
+import { cryptoService, VAULT_KEYS } from './services/cryptoService';
+import { loadSecure, sealSecure, commitSealed } from './services/secureStorage';
 
 // Storage Keys
 const STORAGE_KEY_PEOPLE = 'fch_secure_people';
@@ -74,30 +76,55 @@ const App: React.FC = () => {
     }
   }, [state.settings]);
 
-  // Persist data changes when unlocked
+  // Encryption is async, so a slow save can finish after a newer one. Each run
+  // claims a generation and drops its result if it has since been superseded,
+  // rather than racing stale records onto disk.
+  const saveGeneration = useRef(0);
+
+  // Persist data changes when unlocked. Writing the pair only after both are
+  // sealed keeps people and medications from diverging on a mid-save failure.
   useEffect(() => {
-    if (state.view !== ViewState.LOCKED) {
+    if (state.view === ViewState.LOCKED || !cryptoService.isUnlocked()) return;
+
+    const generation = ++saveGeneration.current;
+
+    (async () => {
       try {
-        localStorage.setItem(STORAGE_KEY_PEOPLE, JSON.stringify(state.people));
-        localStorage.setItem(STORAGE_KEY_MEDS, JSON.stringify(state.medications));
+        const sealedPeople = await sealSecure(state.people);
+        const sealedMeds = await sealSecure(state.medications);
+
+        if (generation !== saveGeneration.current) return; // superseded
+
+        commitSealed(STORAGE_KEY_PEOPLE, sealedPeople);
+        commitSealed(STORAGE_KEY_MEDS, sealedMeds);
       } catch (e) {
         console.error("Failed to save to local storage", e);
       }
-    }
+    })();
   }, [state.people, state.medications, state.view]);
 
-  // Simulate loading encrypted data on unlock
-  const handleUnlock = () => {
+  // Decrypt records on unlock. Pre-encryption plaintext is read transparently
+  // and sealed by the save effect that this state change triggers.
+  const handleUnlock = async () => {
     let loadedPeople: Person[] = [];
     let loadedMeds: Medication[] = [];
 
     try {
-      const storedPeople = localStorage.getItem(STORAGE_KEY_PEOPLE);
-      const storedMeds = localStorage.getItem(STORAGE_KEY_MEDS);
-      if (storedPeople) loadedPeople = JSON.parse(storedPeople);
-      if (storedMeds) loadedMeds = JSON.parse(storedMeds);
+      loadedPeople = await loadSecure<Person[]>(STORAGE_KEY_PEOPLE, []);
+      loadedMeds = await loadSecure<Medication[]>(STORAGE_KEY_MEDS, []);
     } catch (e) {
-      console.error("Failed to load from local storage", e);
+      // Do NOT fall through to the dashboard with empty lists: the save effect
+      // would immediately overwrite intact records with them. Stay locked.
+      console.error("Failed to decrypt stored records", e);
+      // lock() is the load-bearing part: it makes the save effect below bail,
+      // so nothing overwrites the records we could not read. The return is
+      // defence in depth.
+      cryptoService.lock();
+      alert(
+        "Your data could not be decrypted and has been left untouched. " +
+        "Reload and try again, or restore from a backup."
+      );
+      return;
     }
 
     setState(prev => ({
@@ -114,7 +141,11 @@ const App: React.FC = () => {
     const backupData = {
       [STORAGE_KEY_PEOPLE]: localStorage.getItem(STORAGE_KEY_PEOPLE),
       [STORAGE_KEY_MEDS]: localStorage.getItem(STORAGE_KEY_MEDS),
-      // Add other keys here if you have them (e.g. settings)
+      // The salt and validation token must ride along. Without them a restore
+      // lands in setup mode, and the new PIN derives a different key that
+      // cannot read the restored ciphertext. Neither value is secret.
+      ...Object.fromEntries(VAULT_KEYS.map(k => [k, localStorage.getItem(k)])),
+      // Settings are not sensitive, so they stay readable in the backup.
       'fch_settings': JSON.stringify(state.settings)
     };
 
