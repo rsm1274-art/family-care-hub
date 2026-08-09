@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { cryptoService } from '../services/cryptoService';
 import { needsMigration } from '../services/migrateVault';
-import { Delete, AlertTriangle, Upload } from 'lucide-react';
+import { Delete, KeyRound, Upload } from 'lucide-react';
 import { Logo } from './Logo';
 
 interface PinPadProps {
@@ -133,14 +133,18 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock, onForgotPin }) => {
         
         {isSetupMode ? (
            <div className="flex flex-col items-center gap-4 w-full max-w-xs">
-             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 w-full animate-in fade-in zoom-in duration-300">
-               <div className="flex items-center justify-center gap-2 mb-2 text-danger">
-                 <AlertTriangle className="w-5 h-5" />
-                 <span className="font-bold text-sm uppercase tracking-wider">No Recovery</span>
+             {/* Informational, not a danger warning: forgetting the PIN is now
+                 survivable. Losing the PIN *and* the recovery code is not, and
+                 that is the part still worth saying up front. */}
+             <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 w-full animate-in fade-in zoom-in duration-300">
+               <div className="flex items-center justify-center gap-2 mb-2 text-accent">
+                 <KeyRound className="w-5 h-5" />
+                 <span className="font-bold text-sm uppercase tracking-wider">Recovery Code</span>
                </div>
-               <p className="text-danger/90 text-xs text-center leading-relaxed">
-                 <strong>This PIN cannot be recovered if lost.</strong><br/>
-                 Please verify you have recorded it safely.
+               <p className="text-mutedText text-xs text-center leading-relaxed">
+                 <strong className="text-mainText">You will get a one-time recovery code next.</strong><br/>
+                 It is the only way back in if you forget this PIN, so save it
+                 somewhere safe.
                </p>
              </div>
 
