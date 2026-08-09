@@ -1,6 +1,10 @@
-// Bumped to v3 to evict caches holding a stale index.html from the
-// cache-first era; the activate handler deletes anything not named here.
-const CACHE_NAME = 'family-care-hub-v3';
+// Bump this whenever a precached file below changes. Those files are not
+// content-addressed, so cache-first would otherwise serve the old copy
+// forever; the activate handler deletes every cache not named here.
+//
+// v3 evicted caches holding a stale index.html from the cache-first era.
+// v4 evicts the manifest.json that still pointed at CDN-hosted icons.
+const CACHE_NAME = 'family-care-hub-v4';
 
 // Relative URLs resolve against this script's own URL, so these land under
 // /family-care-hub/ on GitHub Pages and under / when served from the root.
