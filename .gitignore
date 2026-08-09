@@ -15,6 +15,10 @@ dist-ssr
 # TypeScript build info (emitted by `tsc -b` in the build script)
 *.tsbuildinfo
 
+# Claude Code local state: launch config and agent worktrees. Machine-local,
+# and the worktrees directory contains whole checkouts of this repo.
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
