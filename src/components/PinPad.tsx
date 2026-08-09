@@ -110,10 +110,6 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock, onForgotPin }) => {
     }, 100);
   };
 
-  const handleRoleBasedAccess = (role: string) => {
-    alert(`Access granted for role: ${role}`);
-  };
-
   // TODO: auto-submit belongs in handleNumberClick, not an effect (see
   // react.dev/learn/you-might-not-need-an-effect). Moving it means threading the
   // submitted PIN through handleSubmit instead of reading it from closure, which
@@ -223,25 +219,6 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock, onForgotPin }) => {
           Forgot your PIN?
         </button>
       )}
-
-      {/* Role-Based Access - Added Section */}
-      <div className="mt-8 w-full max-w-xs text-center">
-        <h3 className="text-lg font-semibold mb-4">Role-Based Access</h3>
-        <div className="flex justify-center gap-4">
-          <button 
-            onClick={() => handleRoleBasedAccess('Parent')}
-            className="flex-1 bg-accent text-white rounded-lg px-4 py-2 font-medium transition-all hover:bg-accent/90"
-          >
-            Parent Access
-          </button>
-          <button 
-            onClick={() => handleRoleBasedAccess('Babysitter')}
-            className="flex-1 bg-accent text-white rounded-lg px-4 py-2 font-medium transition-all hover:bg-accent/90"
-          >
-            Babysitter Access
-          </button>
-        </div>
-      </div>
     </div>
   );
 };

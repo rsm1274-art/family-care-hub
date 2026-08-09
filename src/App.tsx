@@ -9,7 +9,6 @@ import { Settings } from './components/Settings';
 import { Terms } from './components/Terms';
 import { X, Save, Camera, Trash2, Maximize2, Download } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { generateOneTimeAccessLink } from './services/accessService';
 import { cryptoService, VAULT_KEYS } from './services/cryptoService';
 import { loadSecure, sealSecure, commitSealed } from './services/secureStorage';
 import { needsMigration, migrateToV2 } from './services/migrateVault';
@@ -396,11 +395,6 @@ const App: React.FC = () => {
     return JSON.stringify(emergencyData);
   };
 
-  const handleShareAccess = (personId: string) => {
-    const link = generateOneTimeAccessLink(personId);
-    alert(`Share this link with the caregiver: ${link}`);
-  };
-
   // --- Renders ---
 
   const isViewLocked = state.view === ViewState.LOCKED;
@@ -759,22 +753,11 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Emergency QR Code & Share Access */}
+      {/* Emergency QR Code */}
       {state.view === ViewState.PERSON_DETAIL && activePerson && (
         <div className="absolute top-4 right-4 z-50 bg-surface/80 p-4 rounded-lg border border-borderColor shadow-md backdrop-blur-sm">
-          {/* Emergency QR Code */}
-          <div className="mb-3">
-            <h3 className="text-sm font-semibold text-mainText mb-2">Emergency QR Code</h3>
-            <QRCodeSVG value={handleGenerateEmergencyQR(activePerson)} size={128} />
-          </div>
-
-          {/* Share Access Button */}
-          <button 
-            onClick={() => handleShareAccess(activePerson.id)}
-            className="w-full bg-accent text-white font-bold py-2 rounded-lg hover:opacity-90 transition-colors flex items-center justify-center gap-2"
-          >
-            <Save className="w-4 h-4" /> Share Access
-          </button>
+          <h3 className="text-sm font-semibold text-mainText mb-2">Emergency QR Code</h3>
+          <QRCodeSVG value={handleGenerateEmergencyQR(activePerson)} size={128} />
         </div>
       )}
     </div>
