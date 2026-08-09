@@ -88,10 +88,6 @@ export const Scanner: React.FC<ScannerProps> = ({ onResult, onCancel }) => {
     reader.readAsDataURL(file);
   };
 
-  const handleSecureSharing = () => {
-    alert('Secure sharing enabled for this session.');
-  };
-
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       {/* Header */}
@@ -184,19 +180,9 @@ export const Scanner: React.FC<ScannerProps> = ({ onResult, onCancel }) => {
         <div className="w-12 opacity-0"></div>
       </div>
 
-      {/* Secure Sharing Section */}
       <div className="p-4 bg-black/50 absolute bottom-0 w-full z-20 backdrop-blur-sm">
-        <div className="flex items-center justify-between">
-          <h3 className="text-white font-semibold text-sm">Secure Sharing</h3>
-          <button 
-            onClick={handleSecureSharing}
-            className="text-accent text-sm font-medium hover:underline"
-          >
-            Enable Secure Sharing
-          </button>
-        </div>
-        <p className="text-slate-400 text-xs mt-1">
-          Your photos are not stored or shared without your consent.
+        <p className="text-slate-400 text-xs text-center">
+          Photos stay on this device. Nothing is uploaded.
         </p>
       </div>
     </div>

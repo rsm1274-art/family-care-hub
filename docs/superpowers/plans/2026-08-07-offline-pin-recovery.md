@@ -88,7 +88,12 @@ describe('base64', () => {
   });
 
   it('handles payloads larger than the argument limit', () => {
-    const bytes = crypto.getRandomValues(new Uint8Array(200_000));
+    // Well past the 0x8000 chunk size used by toBase64. Filled in 64KB slices
+    // because crypto.getRandomValues rejects requests over 65,536 bytes.
+    const bytes = new Uint8Array(200_000);
+    for (let i = 0; i < bytes.length; i += 65_536) {
+      crypto.getRandomValues(bytes.subarray(i, Math.min(i + 65_536, bytes.length)));
+    }
     expect(Array.from(fromBase64(toBase64(bytes)))).toEqual(Array.from(bytes));
   });
 

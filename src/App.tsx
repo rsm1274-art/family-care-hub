@@ -9,11 +9,16 @@ import { Settings } from './components/Settings';
 import { Terms } from './components/Terms';
 import { X, Save, Camera, Trash2, Maximize2, Download } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { generateOneTimeAccessLink } from './services/accessService';
 import { cryptoService, VAULT_KEYS } from './services/cryptoService';
 import { loadSecure, sealSecure, commitSealed } from './services/secureStorage';
+import { needsMigration, migrateToV2 } from './services/migrateVault';
+import { RecoveryCodeModal } from './components/RecoveryCodeModal';
+import { RecoverAccess } from './components/RecoverAccess';
 
 // Storage Keys
+// Exported: Settings reads it to warn when the only copy of the data has no
+// recent backup.
+export const LAST_BACKUP_KEY = 'fch_last_backup';
 const STORAGE_KEY_PEOPLE = 'fch_secure_people';
 const STORAGE_KEY_MEDS = 'fch_secure_meds';
 
@@ -49,6 +54,17 @@ const App: React.FC = () => {
       largeText: false
     }
   });
+
+  // Set after setup, migration, or recovery; cleared once the user confirms
+  // they have saved it. Never persisted.
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
+
+  // Held here rather than read inside Settings, which would make that component
+  // impure. Lazy initialiser so the read happens once, not on every render.
+  const [lastBackup, setLastBackup] = useState<string | null>(
+    () => localStorage.getItem(LAST_BACKUP_KEY),
+  );
 
   // Apply global theme classes
   useEffect(() => {
@@ -87,13 +103,17 @@ const App: React.FC = () => {
     if (state.view === ViewState.LOCKED || !cryptoService.isUnlocked()) return;
 
     const generation = ++saveGeneration.current;
+    let cancelled = false;
 
     (async () => {
       try {
         const sealedPeople = await sealSecure(state.people);
         const sealedMeds = await sealSecure(state.medications);
 
-        if (generation !== saveGeneration.current) return; // superseded
+        // Superseded by a newer save, or unmounted mid-encrypt. Writing now
+        // would put stale ciphertext on disk under a key that may no longer
+        // be the session key.
+        if (cancelled || generation !== saveGeneration.current) return;
 
         commitSealed(STORAGE_KEY_PEOPLE, sealedPeople);
         commitSealed(STORAGE_KEY_MEDS, sealedMeds);
@@ -101,11 +121,34 @@ const App: React.FC = () => {
         console.error("Failed to save to local storage", e);
       }
     })();
+
+    return () => { cancelled = true; };
   }, [state.people, state.medications, state.view]);
 
   // Decrypt records on unlock. Pre-encryption plaintext is read transparently
   // and sealed by the save effect that this state change triggers.
-  const handleUnlock = async () => {
+  const handleUnlock = async (pin: string, wasSetup: boolean): Promise<boolean> => {
+    if (wasSetup) {
+      // App owns setupPin because it returns the recovery code to display.
+      setRecoveryCode(await cryptoService.setupPin(pin));
+    } else if (needsMigration()) {
+      try {
+        setRecoveryCode(await migrateToV2(pin, [STORAGE_KEY_PEOPLE, STORAGE_KEY_MEDS]));
+      } catch (e) {
+        // Wrong PIN is by far the likeliest cause; either way migrateToV2 is
+        // all-or-nothing, so storage is untouched. PinPad shows the error.
+        console.error("Migration failed", e);
+        cryptoService.lock();
+        return false;
+      }
+    }
+
+    return loadRecords();
+  };
+
+  // Shared by the unlock path and by recovery, which also lands with an open
+  // vault but a still-locked view.
+  const loadRecords = async (): Promise<boolean> => {
     let loadedPeople: Person[] = [];
     let loadedMeds: Medication[] = [];
 
@@ -124,7 +167,7 @@ const App: React.FC = () => {
         "Your data could not be decrypted and has been left untouched. " +
         "Reload and try again, or restore from a backup."
       );
-      return;
+      return false;
     }
 
     setState(prev => ({
@@ -133,6 +176,14 @@ const App: React.FC = () => {
       people: loadedPeople,
       medications: loadedMeds
     }));
+    return true;
+  };
+
+  // The code is shown once. Dismissing it is what actually opens the app on
+  // the recovery path, where the view is still locked.
+  const handleRecoveryCodeSaved = async () => {
+    setRecoveryCode(null);
+    if (state.view === ViewState.LOCKED) await loadRecords();
   };
 
   // --- GLOBAL BACKUP FUNCTION ---
@@ -163,6 +214,9 @@ const App: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    const stampedAt = new Date().toISOString();
+    localStorage.setItem(LAST_BACKUP_KEY, stampedAt);
+    setLastBackup(stampedAt);
 
     // Optional: Show a tiny alert or toast
     alert("Backup saved to your Downloads folder!");
@@ -341,17 +395,27 @@ const App: React.FC = () => {
     return JSON.stringify(emergencyData);
   };
 
-  const handleShareAccess = (personId: string) => {
-    const link = generateOneTimeAccessLink(personId);
-    alert(`Share this link with the caregiver: ${link}`);
-  };
-
   // --- Renders ---
 
   const isViewLocked = state.view === ViewState.LOCKED;
 
+  // Outranks everything, including the dashboard: after setup or a migration
+  // the vault is already open and the view has moved on, but the code still
+  // has to be seen exactly once.
+  if (recoveryCode) {
+    return <RecoveryCodeModal code={recoveryCode} onConfirmed={handleRecoveryCodeSaved} />;
+  }
+
   if (isViewLocked) {
-    return <PinPad onUnlock={handleUnlock} />;
+    if (showRecovery) {
+      return (
+        <RecoverAccess
+          onRecovered={(code) => { setShowRecovery(false); setRecoveryCode(code); }}
+          onCancel={() => setShowRecovery(false)}
+        />
+      );
+    }
+    return <PinPad onUnlock={handleUnlock} onForgotPin={() => setShowRecovery(true)} />;
   }
 
   if (state.view === ViewState.SCAN_MEDICATION) {
@@ -370,6 +434,7 @@ const App: React.FC = () => {
         onUpdateSettings={handleUpdateSettings}
         onBack={() => setState(prev => ({ ...prev, view: ViewState.DASHBOARD }))}
         onOpenTerms={() => setState(prev => ({ ...prev, view: ViewState.TERMS }))}
+        lastBackup={lastBackup}
       />
     );
   }
@@ -688,22 +753,11 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Emergency QR Code & Share Access */}
+      {/* Emergency QR Code */}
       {state.view === ViewState.PERSON_DETAIL && activePerson && (
         <div className="absolute top-4 right-4 z-50 bg-surface/80 p-4 rounded-lg border border-borderColor shadow-md backdrop-blur-sm">
-          {/* Emergency QR Code */}
-          <div className="mb-3">
-            <h3 className="text-sm font-semibold text-mainText mb-2">Emergency QR Code</h3>
-            <QRCodeSVG value={handleGenerateEmergencyQR(activePerson)} size={128} />
-          </div>
-
-          {/* Share Access Button */}
-          <button 
-            onClick={() => handleShareAccess(activePerson.id)}
-            className="w-full bg-accent text-white font-bold py-2 rounded-lg hover:opacity-90 transition-colors flex items-center justify-center gap-2"
-          >
-            <Save className="w-4 h-4" /> Share Access
-          </button>
+          <h3 className="text-sm font-semibold text-mainText mb-2">Emergency QR Code</h3>
+          <QRCodeSVG value={handleGenerateEmergencyQR(activePerson)} size={128} />
         </div>
       )}
     </div>

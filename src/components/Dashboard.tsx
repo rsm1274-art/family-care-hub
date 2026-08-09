@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Person } from '../types';
 import { Plus, User, ChevronRight, Settings } from 'lucide-react';
+import { Logo } from './Logo';
 
 interface DashboardProps {
   people: Person[];
@@ -19,9 +20,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ people, onAddPerson, onSel
       </div>
 
       <header className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-mainText">Family Care Hub</h2>
-          <p className="text-mutedText text-sm">Encrypted Local Storage</p>
+        <div className="flex items-center gap-3">
+          <Logo className="w-11 h-11" />
+          <div>
+            <h2 className="text-2xl font-bold text-mainText">Family Care Hub</h2>
+            <p className="text-mutedText text-sm">Encrypted Local Storage</p>
+          </div>
         </div>
         <button 
           onClick={onOpenSettings}

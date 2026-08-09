@@ -2,81 +2,95 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# Family Care Hub
 
-This contains everything you need to run your app locally.
+A local-first app for caregivers to keep critical medical information for the
+people they look after, available fast in an emergency.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1KkwTIntX6iqS-BgHDvVn4mwdD0KqGMdY
+**Everything stays on your device.** There is no server, no account, and no
+sync. Nothing you enter is transmitted anywhere.
+
+---
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+**Prerequisites:** Node.js 20+
 
+```bash
+npm install
+npm run dev
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Other scripts: `npm test` (vitest), `npm run build` (typecheck + build),
+`npm run lint`.
 
-# Family Care Hub
-
-## Overview
-Family Care Hub is a secure application designed to help caregivers manage and share critical medical information. The app ensures that sensitive data is protected while remaining accessible in emergencies.
-
----
-
-## Security Features
-
-### 1. **Data Encryption**
-- **Local Storage Encryption**: All user data is encrypted using AES (Advanced Encryption Standard) before being stored locally. This ensures that even if the storage is accessed, the data remains unreadable without the encryption key.
-- **Encryption Keys**: Keys are securely generated and managed by the app, ensuring they are not exposed.
-
-### 2. **Role-Based Access Control (RBAC)**
-- **Multi-Caregiver Permissions**: Different caregivers (e.g., parents, babysitters, schools) are assigned specific roles with defined access levels.
-- **Granular Permissions**: Users can control who can view, edit, or share specific data.
-
-### 3. **Secure Sharing**
-- **One-Time Access Links**: Temporary, secure links are generated for external caregivers (e.g., babysitters, schools). These links expire after a single use or a set time.
-- **QR Code Sharing**: Emergency information can be shared via QR codes, ensuring quick access without compromising security.
-
-### 4. **Emergency Access**
-- **Lock Screen Widget**: Critical information (e.g., allergies, emergency contacts) is accessible via a lock screen widget or QR code without requiring a password.
-- **Read-Only Mode**: Emergency access is restricted to viewing essential data only.
-
-### 5. **Data Integrity**
-- **Tamper Detection**: The app detects and alerts users if data has been modified outside the app.
-- **Backup and Restore**: Encrypted backups ensure data can be restored without exposure.
-
-### 6. **Privacy by Design**
-- **No Cloud Storage**: All data is stored locally on the user's device, eliminating risks associated with cloud breaches.
-- **Minimal Data Collection**: The app collects only the data necessary for its functionality.
+The dev server binds to localhost. For testing on a phone on your own network,
+opt in per run with `npm run dev -- --host`.
 
 ---
 
-## How It Protects User Data
+## Security
 
-1. **Encryption at Rest**:
-   - All data stored locally is encrypted using AES-256.
-   - Encryption keys are derived from user-defined PINs, ensuring only authorized users can decrypt the data.
+Claims below describe what the code actually does. Anything the app does not
+implement is not listed.
 
-2. **Encryption in Transit**:
-   - When sharing data (e.g., via QR codes or one-time links), the app uses HTTPS to secure the transmission.
+### Encryption at rest
+- Records are encrypted with **AES-256-GCM** before being written to
+  `localStorage`.
+- A random 256-bit data key encrypts your records. That key is itself
+  encrypted twice over: once with a key derived from your PIN, once with a key
+  derived from your recovery code. Key derivation is **PBKDF2-SHA256 at 600,000
+  iterations**.
+- The data key exists **only in memory while the app is unlocked**. It is never
+  written to disk. Closing or reloading the app discards it.
+- Your PIN is never stored, in any form. It is used to derive a key, and that
+  key either unwraps the data key or it does not.
 
-3. **Secure Authentication**:
-   - The app uses a PIN-based authentication system to unlock access.
-   - PINs are hashed and never stored directly.
+### Recovery
+- A **160-bit recovery code** is issued once, when you first set your PIN. It is
+  the only way back into your data if you forget the PIN. It cannot be reissued
+  or reset — there is no server and no account, so there is nobody to ask.
+- Using the recovery code retires it and issues a new one, because the old code
+  has just been typed into a field.
+- **Changing your PIN** re-encrypts only the data key, not your records, so it
+  is instant no matter how many photos you have stored.
 
-4. **Regular Security Audits**:
-   - The app undergoes regular code reviews and security audits to identify and fix vulnerabilities.
+### Integrity
+- AES-GCM is authenticated: records that have been altered outside the app fail
+  to decrypt. The app then refuses to open rather than showing you corrupted or
+  partial medical information, and it leaves the stored data untouched.
 
-5. **User Control**:
-   - Users have full control over their data, including the ability to delete it permanently.
-   - Sharing features are opt-in and require explicit user consent.
+### Backups
+- The export is **encrypted** — it is the same ciphertext, plus the wrapped keys
+  needed to open it. It is safe to keep on a cloud drive or USB stick.
+- A restored backup opens only with the PIN that was in use when it was taken.
+
+### Emergency QR code
+- The emergency QR encodes the selected person's name, date of birth,
+  medications and emergency contact **in plain text, unencrypted and
+  deliberately so** — it is meant to be readable by a paramedic with any phone.
+- Treat it like a printed medical card. Show it only to people you are willing
+  to hand that information to.
+
+---
+
+## What this app cannot protect you from
+
+- **Losing the device.** Your records exist only here. Export an encrypted
+  backup and keep it somewhere else; that is the only disaster recovery
+  available.
+- **Losing both the PIN and the recovery code.** The data is then unrecoverable,
+  by design. That is the cost of nobody else holding your key.
+- **Someone who has both your device and your PIN.** A 6-digit PIN is short on
+  purpose, for one-handed use under stress. It is not a defence against a
+  determined attacker who physically holds your device.
 
 ---
 
 ## Disclaimer
-Family Care Hub is designed to prioritize user privacy and security. However, users are encouraged to follow best practices, such as using strong PINs and keeping their devices secure.
 
-For questions or support, please contact our team.
+Family Care Hub is built to keep your data private, but you should still follow
+basic precautions: choose a PIN that is not your birthday, keep your device
+locked, and store your recovery code somewhere separate from the device.
+
+This app has not undergone an independent security audit.

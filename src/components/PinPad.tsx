@@ -1,12 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { cryptoService } from '../services/cryptoService';
-import { Lock, ShieldCheck, Delete, AlertTriangle, Upload } from 'lucide-react';
+import { needsMigration } from '../services/migrateVault';
+import { Delete, KeyRound, Upload } from 'lucide-react';
+import { Logo } from './Logo';
 
 interface PinPadProps {
-  onUnlock: () => void;
+  /**
+   * `wasSetup` is true when this call created the vault, so App knows to run
+   * setupPin and surface the recovery code rather than treating it as an
+   * ordinary unlock. Resolves false when the PIN was not accepted -- App
+   * verifies it itself on the migration path, where unlock() cannot.
+   */
+  onUnlock: (pin: string, wasSetup: boolean) => Promise<boolean>;
+  onForgotPin: () => void;
 }
 
-export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
+export const PinPad: React.FC<PinPadProps> = ({ onUnlock, onForgotPin }) => {
   const [pin, setPin] = useState<string>('');
   const [isSetupMode, setIsSetupMode] = useState<boolean>(!cryptoService.isSetup());
   const [confirmPin, setConfirmPin] = useState<string | null>(null);
@@ -69,22 +78,26 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
             setPin('');
             setLoading(false);
             return;
-          } else {
-            if (pin === confirmPin) {
-              await cryptoService.setupPin(pin);
-              setIsSetupMode(false);
-              onUnlock();
-            } else {
-              setError("PINs do not match. Try again.");
-              setConfirmPin(null);
-              setPin('');
-            }
           }
+          if (pin !== confirmPin) {
+            setError("PINs do not match. Try again.");
+            setConfirmPin(null);
+            setPin('');
+            return;
+          }
+          // App owns setupPin: it returns the recovery code, which has to be
+          // displayed, and this component has nowhere to put it.
+          setIsSetupMode(false);
+          await onUnlock(pin, true);
         } else {
-          const isValid = await cryptoService.unlock(pin);
-          if (isValid) {
-            onUnlock();
-          } else {
+          // On a v1 vault unlock() always fails -- there is no v2 pin slot yet.
+          // App migrates instead, and the migration verifies the PIN itself.
+          if (!needsMigration() && !(await cryptoService.unlock(pin))) {
+            setError("Invalid PIN.");
+            setPin('');
+            return;
+          }
+          if (!(await onUnlock(pin, false))) {
             setError("Invalid PIN.");
             setPin('');
           }
@@ -95,10 +108,6 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
         setLoading(false);
       }
     }, 100);
-  };
-
-  const handleRoleBasedAccess = (role: string) => {
-    alert(`Access granted for role: ${role}`);
   };
 
   // TODO: auto-submit belongs in handleNumberClick, not an effect (see
@@ -115,9 +124,7 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-primary text-mainText p-6">
       <div className="mb-8 flex flex-col items-center">
-        <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-4">
-          {isSetupMode ? <ShieldCheck className="w-8 h-8 text-accent" /> : <Lock className="w-8 h-8 text-accent" />}
-        </div>
+        <Logo className="w-20 h-20 mb-4" />
         <h1 className="text-2xl font-bold mb-2 text-mainText">
           {isSetupMode 
             ? (confirmPin ? "Confirm Master PIN" : "Create Master PIN") 
@@ -126,14 +133,18 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
         
         {isSetupMode ? (
            <div className="flex flex-col items-center gap-4 w-full max-w-xs">
-             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 w-full animate-in fade-in zoom-in duration-300">
-               <div className="flex items-center justify-center gap-2 mb-2 text-danger">
-                 <AlertTriangle className="w-5 h-5" />
-                 <span className="font-bold text-sm uppercase tracking-wider">No Recovery</span>
+             {/* Informational, not a danger warning: forgetting the PIN is now
+                 survivable. Losing the PIN *and* the recovery code is not, and
+                 that is the part still worth saying up front. */}
+             <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 w-full animate-in fade-in zoom-in duration-300">
+               <div className="flex items-center justify-center gap-2 mb-2 text-accent">
+                 <KeyRound className="w-5 h-5" />
+                 <span className="font-bold text-sm uppercase tracking-wider">Recovery Code</span>
                </div>
-               <p className="text-danger/90 text-xs text-center leading-relaxed">
-                 <strong>This PIN cannot be recovered if lost.</strong><br/>
-                 Please verify you have recorded it safely.
+               <p className="text-mutedText text-xs text-center leading-relaxed">
+                 <strong className="text-mainText">You will get a one-time recovery code next.</strong><br/>
+                 It is the only way back in if you forget this PIN, so save it
+                 somewhere safe.
                </p>
              </div>
 
@@ -207,24 +218,11 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock }) => {
         </button>
       </div>
 
-      {/* Role-Based Access - Added Section */}
-      <div className="mt-8 w-full max-w-xs text-center">
-        <h3 className="text-lg font-semibold mb-4">Role-Based Access</h3>
-        <div className="flex justify-center gap-4">
-          <button 
-            onClick={() => handleRoleBasedAccess('Parent')}
-            className="flex-1 bg-accent text-white rounded-lg px-4 py-2 font-medium transition-all hover:bg-accent/90"
-          >
-            Parent Access
-          </button>
-          <button 
-            onClick={() => handleRoleBasedAccess('Babysitter')}
-            className="flex-1 bg-accent text-white rounded-lg px-4 py-2 font-medium transition-all hover:bg-accent/90"
-          >
-            Babysitter Access
-          </button>
-        </div>
-      </div>
+      {!isSetupMode && (
+        <button onClick={onForgotPin} className="mt-4 text-sm text-mutedText underline">
+          Forgot your PIN?
+        </button>
+      )}
     </div>
   );
 };
