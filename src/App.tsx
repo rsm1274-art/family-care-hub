@@ -227,6 +227,9 @@ const App: React.FC = () => {
   };
 
   const handleBack = () => {
+    // Otherwise the flag survives the trip to the dashboard and the QR pops
+    // open again — showing the next person — the moment a profile is picked.
+    setShowEmergencyInfo(false);
     setState(prev => ({ ...prev, view: ViewState.DASHBOARD, activePersonId: null }));
   };
 
@@ -248,6 +251,7 @@ const App: React.FC = () => {
   const [medFormData, setMedFormData] = useState(INITIAL_MED_FORM);
   const [tempMedImage, setTempMedImage] = useState<string | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [showEmergencyInfo, setShowEmergencyInfo] = useState(false);
 
   const handleAddMedicationClick = () => {
     setEditingMedId(null);
@@ -453,7 +457,7 @@ const App: React.FC = () => {
       
       {/* --- GLOBAL BACKUP BUTTON --- */}
       {/* Floats top-right on the detail views. The dashboard renders its own
-          copy inside the Emergency Summary box so it can sit centred against
+          copy inside the Backup box so it can sit centred against
           it; a root-level overlay cannot know that box's height. */}
       {!isViewLocked && state.view !== ViewState.DASHBOARD && (
         <button
@@ -484,6 +488,7 @@ const App: React.FC = () => {
           onEdit={handleEditPersonClick}
           onViewImage={(img) => setViewingImage(img)}
           onEditMedication={handleEditMedication}
+          onShowEmergencyInfo={() => setShowEmergencyInfo(true)}
         />
       )}
 
@@ -756,11 +761,36 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Emergency QR Code */}
-      {state.view === ViewState.PERSON_DETAIL && activePerson && (
-        <div className="absolute top-4 right-4 z-50 bg-surface/80 p-4 rounded-lg border border-borderColor shadow-md backdrop-blur-sm">
-          <h3 className="text-sm font-semibold text-mainText mb-2">Emergency QR Code</h3>
-          <QRCodeSVG value={handleGenerateEmergencyQR(activePerson)} size={128} />
+      {/* Emergency QR Code. Opened from the Emergency Info button on the detail
+          page; as a pinned overlay it covered the header. */}
+      {showEmergencyInfo && activePerson && (
+        <div
+          className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm"
+          onClick={() => setShowEmergencyInfo(false)}
+        >
+          <div
+            className="bg-surface p-6 rounded-2xl w-full max-w-sm border border-borderColor shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-mainText">Emergency Info</h3>
+              <button
+                onClick={() => setShowEmergencyInfo(false)}
+                className="text-mutedText hover:text-mainText"
+                aria-label="Close"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            {/* White plate regardless of theme: scanners need the light quiet
+                zone, and the surface token goes near-black in dark mode. */}
+            <div className="bg-white p-4 rounded-xl flex justify-center">
+              <QRCodeSVG value={handleGenerateEmergencyQR(activePerson)} size={200} />
+            </div>
+            <p className="text-sm text-mutedText mt-4 text-center">
+              Scan for {activePerson.name}'s name, date of birth, medications and physician contact.
+            </p>
+          </div>
         </div>
       )}
     </div>

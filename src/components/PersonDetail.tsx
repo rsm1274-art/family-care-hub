@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Person, Medication } from '../types';
-import { ArrowLeft, Pill, Info, Plus, AlertTriangle, Stethoscope, Shield, Pencil, Eye, Lock } from 'lucide-react';
+import { ArrowLeft, Pill, Info, Plus, AlertTriangle, Stethoscope, Shield, Pencil, Eye, Lock, QrCode } from 'lucide-react';
 
 interface PersonDetailProps {
   person: Person;
@@ -10,9 +10,10 @@ interface PersonDetailProps {
   onEdit: () => void;
   onViewImage: (base64: string) => void;
   onEditMedication: (id: string) => void;
+  onShowEmergencyInfo: () => void;
 }
 
-export const PersonDetail: React.FC<PersonDetailProps> = ({ person, medications, onBack, onAddMedication, onEdit, onViewImage, onEditMedication }) => {
+export const PersonDetail: React.FC<PersonDetailProps> = ({ person, medications, onBack, onAddMedication, onEdit, onViewImage, onEditMedication, onShowEmergencyInfo }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'meds'>('meds');
 
   const handleAddMedicationReminder = (medicationId: string) => {
@@ -55,6 +56,20 @@ export const PersonDetail: React.FC<PersonDetailProps> = ({ person, medications,
           }`}
         >
           <Pill className="w-4 h-4" /> Meds
+        </button>
+      </div>
+
+      {/* Emergency info. The QR code used to be pinned over the top-right of
+          the page, where it sat on top of the header. It now lives behind this
+          button, which spans the content width so it collides with nothing and
+          stays reachable from either tab. */}
+      <div className="px-4 pt-4">
+        <button
+          onClick={onShowEmergencyInfo}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-danger/40 bg-danger/10 text-mainText font-semibold hover:bg-danger/20 transition-colors"
+        >
+          <QrCode className="w-5 h-5" />
+          <span>Emergency Info</span>
         </button>
       </div>
 

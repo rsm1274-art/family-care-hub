@@ -14,7 +14,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ people, onAddPerson, onSelectPerson, onOpenSettings, onBackup }) => {
   return (
     <div className="p-4 space-y-6 pb-24">
-      {/* Emergency Summary.
+      {/* Backup.
 
           Colours come from the danger token rather than a fixed bg-red-100:
           the palette swaps under .light-mode, so a hardcoded pale pink left
@@ -23,15 +23,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ people, onAddPerson, onSel
 
           `relative` anchors the backup button, which the app used to float over
           this box from the root element. */}
-      <div className="emergency-summary relative rounded-lg border border-danger/40 bg-danger/10 p-4">
+      <div className="backup-summary relative rounded-lg border border-danger/40 bg-danger/10 p-4">
         {/* Clears the button's 36px circle plus its 48px right offset, so
             longer copy wraps instead of running underneath it. */}
         <div className="pr-24">
-          <h3 className="text-lg font-bold text-mainText">Emergency Summary</h3>
+          <h3 className="text-lg font-bold text-mainText">Backup</h3>
           {/* mainText, not mutedText: over the tinted box mutedText measured
               3.83:1 in light mode, under the 4.5:1 AA floor. Size and weight
               carry the hierarchy instead of colour. */}
-          <p className="text-sm text-mainText">Ensure all critical information is up-to-date and accessible.</p>
+          <p className="text-sm text-mainText">Download an encrypted copy of your records so nothing is lost.</p>
         </div>
         {/* top-1/2 with the -50% shift centres against the box whatever height
             the text wraps to, rather than pinning a measured offset. */}
