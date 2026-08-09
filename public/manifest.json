@@ -6,29 +6,27 @@
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
+
+  "_comment_icons": "The -v2 suffix is load-bearing. Chrome decides whether an installed WebAPK needs a new icon by diffing this manifest, and it compares icon URLs, not image bytes -- artwork overwritten at the same path is invisible to it and the home-screen icon stays stale forever. iOS is worse: it snapshots the icon at add-to-home-screen time and never re-checks. So when the artwork changes, bump every icon to -v3 (here and in index.html) and rename the files; do not overwrite them in place. favicon.ico is deliberately absent from this list: a multi-size .ico is not a usable install icon and Chrome ignores it for WebAPK generation, so listing it only adds a candidate that other surfaces might pick. index.html still links it for browser tabs.",
+
   "icons": [
     {
-      "src": "./icon-192.png",
+      "src": "./icon-192-v2.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./icon-512.png",
+      "src": "./icon-512-v2.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./icon-maskable-512.png",
+      "src": "./icon-maskable-512-v2.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    },
-    {
-      "src": "./favicon.ico",
-      "sizes": "16x16 32x32 48x48 64x64 128x128 256x256",
-      "type": "image/x-icon"
     }
   ]
 }

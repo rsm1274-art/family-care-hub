@@ -4,7 +4,10 @@
 //
 // v3 evicted caches holding a stale index.html from the cache-first era.
 // v4 evicts the manifest.json that still pointed at CDN-hosted icons.
-const CACHE_NAME = 'family-care-hub-v4';
+// v5 evicts the old manifest.json and the icon-*.png blobs it named. Those were
+// cached by the cache-first branch below and would otherwise keep serving the
+// previous artwork to any device that had already loaded them.
+const CACHE_NAME = 'family-care-hub-v5';
 
 // Relative URLs resolve against this script's own URL, so these land under
 // /family-care-hub/ on GitHub Pages and under / when served from the root.
