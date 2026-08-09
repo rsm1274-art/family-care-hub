@@ -452,8 +452,10 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-primary text-mainText font-sans selection:bg-accent selection:text-white relative">
       
       {/* --- GLOBAL BACKUP BUTTON --- */}
-      {/* Positioned absolute top-right, visible in Dashboard & Details */}
-      {!isViewLocked && (
+      {/* Floats top-right on the detail views. The dashboard renders its own
+          copy inside the Emergency Summary box so it can sit centred against
+          it; a root-level overlay cannot know that box's height. */}
+      {!isViewLocked && state.view !== ViewState.DASHBOARD && (
         <button
           onClick={handleBackup}
           className="absolute top-4 right-16 z-50 p-2 bg-surface/80 hover:bg-surface border border-borderColor rounded-full text-accent shadow-sm backdrop-blur-sm transition-all hover:scale-105"
@@ -469,6 +471,7 @@ const App: React.FC = () => {
           onAddPerson={handleAddPersonClick}
           onSelectPerson={handleSelectPerson}
           onOpenSettings={handleOpenSettings}
+          onBackup={handleBackup}
         />
       )}
       

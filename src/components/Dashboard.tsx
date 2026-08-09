@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Person } from '../types';
-import { Plus, User, ChevronRight, Settings } from 'lucide-react';
+import { Plus, User, ChevronRight, Settings, Download } from 'lucide-react';
 import { Logo } from './Logo';
 
 interface DashboardProps {
@@ -8,15 +8,40 @@ interface DashboardProps {
   onAddPerson: () => void;
   onSelectPerson: (id: string) => void;
   onOpenSettings: () => void;
+  onBackup: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ people, onAddPerson, onSelectPerson, onOpenSettings }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ people, onAddPerson, onSelectPerson, onOpenSettings, onBackup }) => {
   return (
     <div className="p-4 space-y-6 pb-24">
-      {/* Emergency Summary */}
-      <div className="emergency-summary bg-red-100 p-4 rounded-lg">
-        <h3 className="text-lg font-bold">Emergency Summary</h3>
-        <p className="text-sm">Ensure all critical information is up-to-date and accessible.</p>
+      {/* Emergency Summary.
+
+          Colours come from the danger token rather than a fixed bg-red-100:
+          the palette swaps under .light-mode, so a hardcoded pale pink left
+          near-white body text sitting on near-white in dark mode. This is the
+          same translucent treatment the stale-backup notice in Settings uses.
+
+          `relative` anchors the backup button, which the app used to float over
+          this box from the root element. */}
+      <div className="emergency-summary relative rounded-lg border border-danger/40 bg-danger/10 p-4">
+        {/* Clears the button's 36px circle plus its 48px right offset, so
+            longer copy wraps instead of running underneath it. */}
+        <div className="pr-24">
+          <h3 className="text-lg font-bold text-mainText">Emergency Summary</h3>
+          {/* mainText, not mutedText: over the tinted box mutedText measured
+              3.83:1 in light mode, under the 4.5:1 AA floor. Size and weight
+              carry the hierarchy instead of colour. */}
+          <p className="text-sm text-mainText">Ensure all critical information is up-to-date and accessible.</p>
+        </div>
+        {/* top-1/2 with the -50% shift centres against the box whatever height
+            the text wraps to, rather than pinning a measured offset. */}
+        <button
+          onClick={onBackup}
+          className="absolute right-12 top-1/2 -translate-y-1/2 p-2 bg-surface/80 hover:bg-surface border border-borderColor rounded-full text-accent shadow-sm backdrop-blur-sm transition-all hover:scale-105"
+          title="Download Backup"
+        >
+          <Download className="w-5 h-5" />
+        </button>
       </div>
 
       <header className="flex justify-between items-center mb-6">
