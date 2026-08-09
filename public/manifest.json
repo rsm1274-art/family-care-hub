@@ -8,14 +8,15 @@
   "theme_color": "#0f172a",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2966/2966327.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "./carehub-icon.png",
+      "sizes": "874x874",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2966/2966327.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "./favicon.ico",
+      "sizes": "16x16 32x32 48x48 64x64 128x128 256x256",
+      "type": "image/x-icon"
     }
   ]
 }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { cryptoService } from '../services/cryptoService';
 import { needsMigration } from '../services/migrateVault';
-import { Lock, ShieldCheck, Delete, AlertTriangle, Upload } from 'lucide-react';
+import { Delete, AlertTriangle, Upload } from 'lucide-react';
+import { Logo } from './Logo';
 
 interface PinPadProps {
   /**
@@ -127,9 +128,7 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock, onForgotPin }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-primary text-mainText p-6">
       <div className="mb-8 flex flex-col items-center">
-        <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-4">
-          {isSetupMode ? <ShieldCheck className="w-8 h-8 text-accent" /> : <Lock className="w-8 h-8 text-accent" />}
-        </div>
+        <Logo className="w-20 h-20 mb-4" />
         <h1 className="text-2xl font-bold mb-2 text-mainText">
           {isSetupMode 
             ? (confirmPin ? "Confirm Master PIN" : "Create Master PIN") 
