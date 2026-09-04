@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ViewState } from './types';
-import type { AppState, Person, Medication, SettingsState } from './types';
+import type { AppState, Person, Medication, Document, SettingsState } from './types';
 import { PinPad } from './components/PinPad';
 import { Dashboard } from './components/Dashboard';
 import { PersonDetail } from './components/PersonDetail';
@@ -14,6 +14,7 @@ import { loadSecure, sealSecure, commitSealed } from './services/secureStorage';
 import { needsMigration, migrateToV2 } from './services/migrateVault';
 import { RecoveryCodeModal } from './components/RecoveryCodeModal';
 import { RecoverAccess } from './components/RecoverAccess';
+import { buildShareExport, applyShareImport, isShareExport } from './services/shareExport';
 
 // Storage Keys
 // Exported: Settings reads it to warn when the only copy of the data has no
@@ -21,6 +22,7 @@ import { RecoverAccess } from './components/RecoverAccess';
 export const LAST_BACKUP_KEY = 'fch_last_backup';
 const STORAGE_KEY_PEOPLE = 'fch_secure_people';
 const STORAGE_KEY_MEDS = 'fch_secure_meds';
+const STORAGE_KEY_DOCS = 'fch_secure_documents';
 
 const INITIAL_FORM_STATE = {
   name: '',
@@ -109,6 +111,7 @@ const App: React.FC = () => {
       try {
         const sealedPeople = await sealSecure(state.people);
         const sealedMeds = await sealSecure(state.medications);
+        const sealedDocs = await sealSecure(state.documents);
 
         // Superseded by a newer save, or unmounted mid-encrypt. Writing now
         // would put stale ciphertext on disk under a key that may no longer
@@ -117,13 +120,14 @@ const App: React.FC = () => {
 
         commitSealed(STORAGE_KEY_PEOPLE, sealedPeople);
         commitSealed(STORAGE_KEY_MEDS, sealedMeds);
+        commitSealed(STORAGE_KEY_DOCS, sealedDocs);
       } catch (e) {
         console.error("Failed to save to local storage", e);
       }
     })();
 
     return () => { cancelled = true; };
-  }, [state.people, state.medications, state.view]);
+  }, [state.people, state.medications, state.documents, state.view]);
 
   // Decrypt records on unlock. Pre-encryption plaintext is read transparently
   // and sealed by the save effect that this state change triggers.
@@ -151,10 +155,12 @@ const App: React.FC = () => {
   const loadRecords = async (): Promise<boolean> => {
     let loadedPeople: Person[] = [];
     let loadedMeds: Medication[] = [];
+    let loadedDocs: Document[] = [];
 
     try {
       loadedPeople = await loadSecure<Person[]>(STORAGE_KEY_PEOPLE, []);
       loadedMeds = await loadSecure<Medication[]>(STORAGE_KEY_MEDS, []);
+      loadedDocs = await loadSecure<Document[]>(STORAGE_KEY_DOCS, []);
     } catch (e) {
       // Do NOT fall through to the dashboard with empty lists: the save effect
       // would immediately overwrite intact records with them. Stay locked.
@@ -174,7 +180,8 @@ const App: React.FC = () => {
       ...prev,
       view: ViewState.DASHBOARD,
       people: loadedPeople,
-      medications: loadedMeds
+      medications: loadedMeds,
+      documents: loadedDocs
     }));
     return true;
   };
@@ -192,6 +199,7 @@ const App: React.FC = () => {
     const backupData = {
       [STORAGE_KEY_PEOPLE]: localStorage.getItem(STORAGE_KEY_PEOPLE),
       [STORAGE_KEY_MEDS]: localStorage.getItem(STORAGE_KEY_MEDS),
+      [STORAGE_KEY_DOCS]: localStorage.getItem(STORAGE_KEY_DOCS),
       // The salt and validation token must ride along. Without them a restore
       // lands in setup mode, and the new PIN derives a different key that
       // cannot read the restored ciphertext. Neither value is secret.
@@ -220,6 +228,82 @@ const App: React.FC = () => {
 
     // Optional: Show a tiny alert or toast
     alert("Backup saved to your Downloads folder!");
+  };
+
+  // --- SHAREABLE EXPORT (unlocked, portable to another device/app) ---
+  // Unlike handleBackup above, this file is NOT sealed by this device's
+  // vault -- it's plain JSON so a sibling's phone or the desktop app can
+  // open it without knowing this device's PIN.
+  const [showSharePicker, setShowSharePicker] = useState(false);
+  const [shareSelection, setShareSelection] = useState<Set<string>>(new Set());
+  const [sharing, setSharing] = useState(false);
+  const [importingShare, setImportingShare] = useState(false);
+
+  const openSharePicker = () => {
+    setShareSelection(new Set(state.people.map(p => p.id)));
+    setShowSharePicker(true);
+  };
+
+  const toggleSharePerson = (id: string) => {
+    setShareSelection(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleShareExport = () => {
+    if (sharing || shareSelection.size === 0) return;
+    setSharing(true);
+    try {
+      const share = buildShareExport(state.people, state.medications, state.documents, Array.from(shareSelection));
+      const dataStr = JSON.stringify(share, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      link.download = `FamilyCare_Share_${date}.json`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setShowSharePicker(false);
+      alert("Share file saved to your Downloads folder! Anyone with the app can import it -- no PIN needed.");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const handleImportShare = async (file: File): Promise<void> => {
+    setImportingShare(true);
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      if (!isShareExport(json)) {
+        alert('That file is not a Family Care Hub share file.');
+        return;
+      }
+      const result = applyShareImport(json, state.people, state.medications, state.documents);
+      setState(prev => ({
+        ...prev,
+        people: result.people,
+        medications: result.medications,
+        documents: result.documents,
+      }));
+      alert(`Imported ${result.counts.people} people, ${result.counts.medications} medications, and ${result.counts.documents} documents.`);
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        alert('That file is not a valid backup file.');
+      } else {
+        console.error('Share import failed', e);
+        alert('Import failed.');
+      }
+    } finally {
+      setImportingShare(false);
+    }
   };
 
   const handleSelectPerson = (id: string) => {
@@ -433,12 +517,15 @@ const App: React.FC = () => {
 
   if (state.view === ViewState.SETTINGS) {
     return (
-      <Settings 
+      <Settings
         settings={state.settings}
         onUpdateSettings={handleUpdateSettings}
         onBack={() => setState(prev => ({ ...prev, view: ViewState.DASHBOARD }))}
         onOpenTerms={() => setState(prev => ({ ...prev, view: ViewState.TERMS }))}
         lastBackup={lastBackup}
+        onOpenSharePicker={openSharePicker}
+        onImportShare={handleImportShare}
+        importingShare={importingShare}
       />
     );
   }
@@ -525,6 +612,49 @@ const App: React.FC = () => {
             className="max-w-full max-h-full object-contain p-1"
             onClick={(e) => e.stopPropagation()} // Prevent closing when clicking image
           />
+        </div>
+      )}
+
+      {/* Shareable Export: choose which people to include */}
+      {showSharePicker && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-surface p-6 rounded-2xl w-full max-w-sm border border-borderColor shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-mainText">Share Records</h3>
+              <button onClick={() => setShowSharePicker(false)} className="text-mutedText hover:text-mainText">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <p className="text-sm text-mutedText mb-4">
+              Choose who to include. This file is <strong>not locked to your PIN</strong> --
+              anyone with the app can open it. Only the selected people's medications and
+              documents go in the file.
+            </p>
+            <div className="space-y-2 max-h-64 overflow-y-auto mb-5">
+              {state.people.map(p => (
+                <label
+                  key={p.id}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-borderColor hover:bg-surface-hover cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={shareSelection.has(p.id)}
+                    onChange={() => toggleSharePerson(p.id)}
+                    className="w-4 h-4 accent-accent"
+                  />
+                  <span className="text-mainText">{p.name}</span>
+                </label>
+              ))}
+            </div>
+            <button
+              onClick={handleShareExport}
+              disabled={sharing || shareSelection.size === 0}
+              className="w-full bg-accent text-white font-bold py-3 rounded-lg hover:opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              <Download className="w-4 h-4" />
+              {sharing ? 'Preparing…' : `Share (${shareSelection.size} of ${state.people.length})`}
+            </button>
+          </div>
         </div>
       )}
 

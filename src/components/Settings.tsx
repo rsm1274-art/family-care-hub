@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import type { SettingsState } from '../types';
-import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info, AlertTriangle } from 'lucide-react';
+import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info, AlertTriangle, Share2, Loader2 } from 'lucide-react';
 
 interface SettingsProps {
   settings: SettingsState;
@@ -9,15 +9,30 @@ interface SettingsProps {
   onOpenTerms: () => void;
   /** ISO timestamp of the last export, or null if there has never been one. */
   lastBackup: string | null;
+  /** Opens the person-picker for a shareable (unlocked) export. */
+  onOpenSharePicker: () => void;
+  onImportShare: (file: File) => Promise<void>;
+  importingShare: boolean;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ 
-  settings, 
-  onUpdateSettings, 
+export const Settings: React.FC<SettingsProps> = ({
+  settings,
+  onUpdateSettings,
   onBack,
   onOpenTerms,
-  lastBackup
+  lastBackup,
+  onOpenSharePicker,
+  onImportShare,
+  importingShare
 }) => {
+  const shareFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleShareFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    await onImportShare(file);
+  };
   // Captured once per mount rather than read during render: the clock is an
   // impure source, and this panel does not need it to tick.
   const [now] = useState(() => Date.now());
@@ -105,6 +120,63 @@ export const Settings: React.FC<SettingsProps> = ({
                 <br/><br/>
                 <strong>Important:</strong> a restored backup can only be opened with the PIN that was in use when the backup was taken. Choosing a different PIN will not work, because the file is encrypted with the original one.
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* --- SHARE WITH FAMILY (unlocked, portable export) --- */}
+        <div className="bg-surface rounded-2xl p-6 shadow-sm border border-borderColor">
+          <div className="flex items-center gap-3 mb-4 text-accent">
+            <div className="p-2 bg-accent/10 rounded-lg">
+              <Share2 className="w-5 h-5" />
+            </div>
+            <h2 className="text-lg font-bold">Share with Family</h2>
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-accent/5 rounded-xl p-4 border border-accent/20">
+              <h3 className="font-semibold text-accent flex items-center gap-2 mb-2">
+                <Share2 className="w-4 h-4" />
+                Send Someone's Records
+              </h3>
+              <p className="text-sm text-mainText/80 leading-relaxed mb-3">
+                Choose one person (or a few) to send to a family member -- for example, just your
+                father's records, without your kids'. Unlike the backup above, this file is{' '}
+                <strong>not locked to your PIN</strong>, so it can be opened by anyone with the app.
+              </p>
+              <button
+                onClick={onOpenSharePicker}
+                className="flex items-center gap-2 text-sm text-accent hover:opacity-80 font-medium px-4 py-2 rounded-lg border border-accent/30 hover:bg-accent/10 transition-colors"
+              >
+                <Share2 className="w-4 h-4" /> Choose People to Share
+              </button>
+            </div>
+
+            <div className="bg-amber-500/5 rounded-xl p-4 border border-amber-500/20">
+              <h3 className="font-semibold text-amber-500 flex items-center gap-2 mb-2">
+                <Upload className="w-4 h-4" />
+                Import Records
+              </h3>
+              <p className="text-sm text-mainText/80 leading-relaxed mb-3">
+                Received a share file from a family member (or exported one from the desktop app)?
+                Import it here -- the people, medications, and documents in it will be added to
+                this device.
+              </p>
+              <input
+                type="file"
+                accept=".json,application/json"
+                ref={shareFileInputRef}
+                onChange={handleShareFileChosen}
+                className="hidden"
+              />
+              <button
+                onClick={() => shareFileInputRef.current?.click()}
+                disabled={importingShare}
+                className="flex items-center gap-2 text-sm text-amber-600 hover:text-amber-500 font-medium px-4 py-2 rounded-lg border border-amber-500/30 hover:bg-amber-500/10 transition-colors disabled:opacity-60"
+              >
+                {importingShare ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {importingShare ? 'Importing…' : 'Import a Share File'}
+              </button>
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { Settings } from './Settings';
 
 const NOOP = () => {};
+const NOOP_ASYNC = async () => {};
 const SETTINGS = { theme: 'dark' as const, highContrast: false, largeText: false };
 
 const renderSettings = (lastBackup: string | null) =>
@@ -13,6 +14,9 @@ const renderSettings = (lastBackup: string | null) =>
       onBack={NOOP}
       onOpenTerms={NOOP}
       lastBackup={lastBackup}
+      onOpenSharePicker={NOOP}
+      onImportShare={NOOP_ASYNC}
+      importingShare={false}
     />,
   );
 
