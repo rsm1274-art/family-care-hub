@@ -11,10 +11,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "lucide-react": "^0.554.0",
+    "lucide-react": "^1.39.0",
     "qrcode.react": "^4.2.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -22,7 +22,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.5.5",
     "eslint": "^10.8.1",
