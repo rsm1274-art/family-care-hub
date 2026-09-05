@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Household {
+  id         String   @id @default(uuid())
+  name       String
+  inviteCode String   @unique
+  createdAt  DateTime @default(now())
+  users      User[]
+  people     Person[]
+}
+
+model User {
+  id           String    @id @default(uuid())
+  householdId  String
+  household    Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  username     String    @unique
+  passwordHash String
+  displayName  String
+  role         String    @default("member")
+  createdAt    DateTime  @default(now())
+}
+
+model Person {
+  id                String       @id @default(uuid())
+  householdId       String
+  household         Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name              String
+  dob               String       @default("")
+  bloodType         String       @default("")
+  insuranceProvider String       @default("")
+  policyNumber      String       @default("")
+  // Free-text on purpose: mirrors the legacy PWA shape for 1:1 import
+  medicalConditions String       @default("")
+  allergies         String       @default("")
+  primaryPhysician  String       @default("")
+  physicianContact  String       @default("")
+  createdAt         DateTime     @default(now())
+  medications       Medication[]
+  documents         Document[]
+}
+
+model Medication {
+  id             String   @id @default(uuid())
+  personId       String
+  person         Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  name           String
+  dosage         String   @default("")
+  frequency      String   @default("")
+  // Filename under IMAGES_DIR/<personId>/ — images live on the host filesystem, not in the DB
+  labelImageFile String?
+  createdAt      DateTime @default(now())
+}
+
+model Document {
+  id             String   @id @default(uuid())
+  personId       String
+  person         Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  type           String   @default("Other")
+  frontImageFile String?
+  createdAt      DateTime @default(now())
+}

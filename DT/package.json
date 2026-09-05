@@ -1,0 +1,16 @@
+{
+  "name": "family-care-hub",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:renderer": "npm run dev --workspace packages/renderer",
+    "dev:server": "npm run dev --workspace packages/server",
+    "build:renderer": "npm run build --workspace packages/renderer",
+    "build:all": "npm run build --workspace packages/shared-types && npm run build --workspace packages/server && npm run build --workspace packages/renderer && npm run build --workspace packages/electron-shell",
+    "electron": "npm run build:all && electron packages/electron-shell",
+    "dist:win": "npm run build:all && npm run bundle --workspace packages/server && npm run dist --workspace packages/electron-shell"
+  }
+}

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>Family Care Hub</title>
+    <link rel="manifest" href="./manifest.json" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --color-primary: #0f172a; /* Slate 900 */
+        --color-surface: #1e293b; /* Slate 800 */
+        --color-surface-hover: #334155; /* Slate 700 */
+        --color-accent: #0ea5e9; /* Sky 500 */
+        --color-text-main: #f8fafc; /* Slate 50 */
+        --color-text-muted: #94a3b8; /* Slate 400 */
+        --color-border: #334155; /* Slate 700 */
+      }
+
+      .light-mode {
+        --color-primary: #f1f5f9; /* Slate 100 */
+        --color-surface: #ffffff; /* White */
+        --color-surface-hover: #e2e8f0; /* Slate 200 */
+        --color-accent: #0284c7; /* Sky 600 (Darker for contrast) */
+        --color-text-main: #0f172a; /* Slate 900 */
+        --color-text-muted: #64748b; /* Slate 500 */
+        --color-border: #cbd5e1; /* Slate 300 */
+      }
+      
+      .high-contrast {
+        filter: contrast(125%);
+      }
+      
+      .large-text {
+        font-size: 115%;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: 'var(--color-primary)',
+              surface: 'var(--color-surface)',
+              'surface-hover': 'var(--color-surface-hover)',
+              accent: 'var(--color-accent)',
+              mainText: 'var(--color-text-main)',
+              mutedText: 'var(--color-text-muted)',
+              borderColor: 'var(--color-border)',
+              danger: '#ef4444',
+              success: '#10b981',
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Service worker only makes sense when served over http(s) — skip in Electron (file://).
+      if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./service-worker.js')
+            .then(reg => console.log('SW registered', reg))
+            .catch(err => console.log('SW failed', err));
+        });
+      }
+    </script>
+  <script type="module" src="/src/index.tsx"></script>
+</body>
+</html>

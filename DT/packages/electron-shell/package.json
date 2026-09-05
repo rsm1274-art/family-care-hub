@@ -1,0 +1,71 @@
+{
+  "name": "@familycarehub/electron-shell",
+  "private": true,
+  "version": "1.0.0",
+  "productName": "Family Care Hub",
+  "description": "Family Care Hub desktop app",
+  "author": "Family Care Hub",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "pack": "electron-builder --win --dir",
+    "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0",
+    "embedded-postgres": "17.9.0-beta.17"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "~5.8.2"
+  },
+  "build": {
+    "appId": "com.familycarehub.desktop",
+    "electronVersion": "43.0.0",
+    "productName": "Family Care Hub",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "asar": false,
+    "extraResources": [
+      {
+        "from": "../renderer/dist",
+        "to": "renderer"
+      },
+      {
+        "from": "../server/bundle",
+        "to": "server/dist"
+      },
+      {
+        "from": "../server/prisma/migrations",
+        "to": "server/prisma/migrations"
+      },
+      {
+        "from": "../../node_modules/.prisma/client",
+        "to": "server",
+        "filter": [
+          "query_engine-windows.dll.node",
+          "schema.prisma"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Family Care Hub"
+    }
+  }
+}

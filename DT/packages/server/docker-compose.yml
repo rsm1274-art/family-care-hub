@@ -1,0 +1,16 @@
+# Dev-only Postgres. In production the Electron host spawns a bundled Postgres.
+services:
+  db:
+    image: postgres:16
+    container_name: familycarehub-dev-db
+    environment:
+      POSTGRES_USER: familycare
+      POSTGRES_PASSWORD: familycare-dev
+      POSTGRES_DB: familycarehub
+    ports:
+      - "5544:5432"
+    volumes:
+      - fch_pgdata:/var/lib/postgresql/data
+
+volumes:
+  fch_pgdata:
