@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import type { UserDto } from '@familycarehub/shared-types';
 import type { SettingsState } from '../types';
-import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info, LogOut, Users, Copy, Check, Loader2 } from 'lucide-react';
+import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info, LogOut, Users, Copy, Check, Loader2, FolderOpen } from 'lucide-react';
 
 interface SettingsProps {
   settings: SettingsState;
@@ -147,6 +147,25 @@ export const Settings: React.FC<SettingsProps> = ({
                 everyone. Their medications, documents, and photos all go in the file. Move it to
                 another computer to bring those records there too.
               </p>
+            </div>
+
+            <div className="bg-emerald-500/5 rounded-xl p-4 border border-emerald-500/20">
+              <h3 className="font-semibold text-emerald-500 flex items-center gap-2 mb-2">
+                <Shield className="w-4 h-4" />
+                Automatic On-Exit Backups
+              </h3>
+              <p className="text-sm text-mainText/80 leading-relaxed mb-3">
+                Family Care Hub automatically creates a rolling snapshot of your database in your
+                <strong> Documents / Family Care Hub Backups</strong> folder whenever you quit the app.
+              </p>
+              {window.electronAPI?.openBackupsFolder && (
+                <button
+                  onClick={() => window.electronAPI?.openBackupsFolder()}
+                  className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-500 font-medium px-4 py-2 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/10 transition-colors"
+                >
+                  <FolderOpen className="w-4 h-4" /> Open Backups Folder
+                </button>
+              )}
             </div>
 
             <div className="bg-amber-500/5 rounded-xl p-4 border border-amber-500/20">

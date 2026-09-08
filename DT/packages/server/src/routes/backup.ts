@@ -282,3 +282,46 @@ backupRouter.post('/import', async (req, res) => {
 
   res.json(result);
 });
+
+/**
+ * Creates a full export snapshot of all data in the database for automatic on-exit backups.
+ */
+export async function generateFullDatabaseBackup(): Promise<HouseholdExport> {
+  const people = await prisma.person.findMany({
+    orderBy: { createdAt: 'asc' },
+    include: { medications: true, documents: true },
+  });
+
+  const exportPeople: HouseholdExportPerson[] = people.map((p) => {
+    const medications: HouseholdExportMedication[] = p.medications.map((m) => ({
+      name: m.name,
+      dosage: m.dosage,
+      frequency: m.frequency,
+      labelPhotoBase64: readImageBase64(p.id, m.labelImageFile),
+    }));
+    const documents: HouseholdExportDocument[] = p.documents.map((d) => ({
+      type: d.type as DocumentType,
+      frontImageBase64: readImageBase64(p.id, d.frontImageFile),
+    }));
+    return {
+      name: p.name,
+      dob: p.dob,
+      bloodType: p.bloodType,
+      insuranceProvider: p.insuranceProvider,
+      policyNumber: p.policyNumber,
+      medicalConditions: p.medicalConditions,
+      allergies: p.allergies,
+      primaryPhysician: p.primaryPhysician,
+      physicianContact: p.physicianContact,
+      medications,
+      documents,
+    };
+  });
+
+  return {
+    format: 'family-care-hub-export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    people: exportPeople,
+  };
+}

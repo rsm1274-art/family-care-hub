@@ -12,6 +12,7 @@ export interface ElectronAPI {
   getConfig(): Promise<ElectronConfig>;
   startLocal(): Promise<{ serverUrl: string }>;
   getHostStatus(): Promise<HostStatus>;
+  openBackupsFolder(): Promise<string>;
   onHostStatus(callback: (status: HostStatus) => void): () => void;
 }
 

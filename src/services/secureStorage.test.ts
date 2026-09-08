@@ -115,4 +115,12 @@ describe('secureStorage', () => {
       await expect(saveSecure(KEY, PEOPLE)).rejects.toThrow(/locked/i);
     });
   });
+
+  describe('storage persistence', () => {
+    it('handles environments without navigator.storage gracefully', async () => {
+      const { checkStoragePersistence, requestPersistentStorage } = await import('./secureStorage');
+      expect(await checkStoragePersistence()).toBe(false);
+      expect(await requestPersistentStorage()).toBe(false);
+    });
+  });
 });

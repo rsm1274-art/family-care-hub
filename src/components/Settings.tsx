@@ -13,6 +13,7 @@ interface SettingsProps {
   onOpenSharePicker: () => void;
   onImportShare: (file: File) => Promise<void>;
   importingShare: boolean;
+  persistentStorageGranted?: boolean;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -23,7 +24,8 @@ export const Settings: React.FC<SettingsProps> = ({
   lastBackup,
   onOpenSharePicker,
   onImportShare,
-  importingShare
+  importingShare,
+  persistentStorageGranted
 }) => {
   const shareFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -107,6 +109,18 @@ export const Settings: React.FC<SettingsProps> = ({
                 The file is <strong>encrypted</strong> — it can only be opened with your PIN, so it is safe to store on a cloud drive or USB stick.
                 <br/><br/>
                 <strong>Recommendation:</strong> Do this after every major update.
+              </p>
+            </div>
+
+            <div className="bg-emerald-500/5 rounded-xl p-4 border border-emerald-500/20">
+              <h3 className="font-semibold text-emerald-500 flex items-center gap-2 mb-2">
+                <Shield className="w-4 h-4" />
+                Device Storage Protection
+              </h3>
+              <p className="text-sm text-mainText/80 leading-relaxed">
+                {persistentStorageGranted
+                  ? 'Persistent storage is active. Your browser will protect this app’s records from automatic cache eviction.'
+                  : 'Storage is protected by your device. Installing this app to your Home Screen ensures the highest data retention.'}
               </p>
             </div>
 

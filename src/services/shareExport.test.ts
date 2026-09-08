@@ -107,3 +107,11 @@ describe('applyShareImport', () => {
     expect(result.documents[0].personId).toBe(newPersonId);
   });
 });
+
+describe('downloadOrShareFile', () => {
+  it('falls back to download when Web Share API is not available', async () => {
+    const { downloadOrShareFile } = await import('./shareExport');
+    const outcome = await downloadOrShareFile('test.json', '{"test":true}');
+    expect(outcome).toBe('downloaded');
+  });
+});

@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getConfig: () => ipcRenderer.invoke('fch:get-config'),
   startLocal: () => ipcRenderer.invoke('fch:start-local'),
   getHostStatus: () => ipcRenderer.invoke('fch:get-host-status'),
+  openBackupsFolder: () => ipcRenderer.invoke('fch:open-backups-folder'),
   onHostStatus: (callback: (status: { state: string; message: string }) => void) => {
     const listener = (_e: unknown, status: { state: string; message: string }) => callback(status);
     ipcRenderer.on('fch:host-status', listener);

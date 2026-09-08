@@ -158,3 +158,51 @@ export function applyShareImport(
     },
   };
 }
+
+/**
+ * Downloads the content as a file, or opens the OS share sheet on supported mobile browsers
+ * (allowing 1-tap save to iCloud Drive, Google Drive, AirDrop, etc.).
+ */
+export async function downloadOrShareFile(
+  filename: string,
+  content: string,
+  mimeType = 'application/json',
+  title?: string
+): Promise<'shared' | 'downloaded' | 'dismissed'> {
+  const blob = new Blob([content], { type: mimeType });
+
+  if (
+    typeof navigator !== 'undefined' &&
+    typeof File !== 'undefined' &&
+    typeof navigator.share === 'function' &&
+    typeof navigator.canShare === 'function'
+  ) {
+    try {
+      const file = new File([blob], filename, { type: mimeType });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: title || filename,
+          text: title || filename,
+        });
+        return 'shared';
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return 'dismissed';
+      }
+      // If sharing fails for other reasons, fall through to download
+    }
+  }
+
+  // Fallback to standard anchor download
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return 'downloaded';
+}

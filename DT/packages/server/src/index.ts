@@ -7,7 +7,7 @@ import { config } from './config';
 import { runMigrations } from './migrate';
 import { prisma } from './prisma';
 import { authRouter } from './routes/auth';
-import { backupRouter } from './routes/backup';
+import { backupRouter, generateFullDatabaseBackup } from './routes/backup';
 import { documentsRouter } from './routes/documents';
 import { imagesRouter } from './routes/images';
 import { medicationsRouter } from './routes/medications';
@@ -26,6 +26,17 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 50 });
 app.get('/api/health', (_req, res) => {
   const body: HealthResponse = { status: 'ok', app: 'family-care-hub', version: config.appVersion };
   res.json(body);
+});
+
+// Internal endpoint for Electron to trigger on app exit before shutdown
+app.get('/api/internal/auto-export', async (_req, res) => {
+  try {
+    const backup = await generateFullDatabaseBackup();
+    res.json(backup);
+  } catch (err) {
+    console.error('Auto-export failed:', err);
+    res.status(500).json({ error: 'Auto-export failed' });
+  }
 });
 
 app.use('/api/auth', authLimiter, authRouter);

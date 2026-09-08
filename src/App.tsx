@@ -10,11 +10,11 @@ import { Terms } from './components/Terms';
 import { X, Save, Camera, Trash2, Maximize2, Download } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { cryptoService, VAULT_KEYS } from './services/cryptoService';
-import { loadSecure, sealSecure, commitSealed } from './services/secureStorage';
+import { loadSecure, sealSecure, commitSealed, checkStoragePersistence, requestPersistentStorage } from './services/secureStorage';
 import { needsMigration, migrateToV2 } from './services/migrateVault';
 import { RecoveryCodeModal } from './components/RecoveryCodeModal';
 import { RecoverAccess } from './components/RecoverAccess';
-import { buildShareExport, applyShareImport, isShareExport } from './services/shareExport';
+import { buildShareExport, applyShareImport, isShareExport, downloadOrShareFile } from './services/shareExport';
 
 // Storage Keys
 // Exported: Settings reads it to warn when the only copy of the data has no
@@ -61,6 +61,17 @@ const App: React.FC = () => {
   // they have saved it. Never persisted.
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const [showRecovery, setShowRecovery] = useState(false);
+  const [persistentStorageGranted, setPersistentStorageGranted] = useState(false);
+  const [backupReminder, setBackupReminder] = useState<{ show: boolean; message: string } | null>(null);
+
+  const triggerBackupReminder = (message = 'Records updated. A quick backup will keep your changes safe.') => {
+    setBackupReminder({ show: true, message });
+  };
+
+  // Check persistent storage status on mount
+  useEffect(() => {
+    void checkStoragePersistence().then(setPersistentStorageGranted);
+  }, []);
 
   // Held here rather than read inside Settings, which would make that component
   // impure. Lazy initialiser so the read happens once, not on every render.
@@ -132,6 +143,9 @@ const App: React.FC = () => {
   // Decrypt records on unlock. Pre-encryption plaintext is read transparently
   // and sealed by the save effect that this state change triggers.
   const handleUnlock = async (pin: string, wasSetup: boolean): Promise<boolean> => {
+    // Request persistent storage on unlock / setup
+    void requestPersistentStorage().then(granted => setPersistentStorageGranted(granted));
+
     if (wasSetup) {
       // App owns setupPin because it returns the recovery code to display.
       setRecoveryCode(await cryptoService.setupPin(pin));
@@ -194,7 +208,7 @@ const App: React.FC = () => {
   };
 
   // --- GLOBAL BACKUP FUNCTION ---
-  const handleBackup = () => {
+  const handleBackup = async () => {
     // 1. Gather all data
     const backupData = {
       [STORAGE_KEY_PEOPLE]: localStorage.getItem(STORAGE_KEY_PEOPLE),
@@ -209,25 +223,25 @@ const App: React.FC = () => {
     };
 
     const dataStr = JSON.stringify(backupData, null, 2);
-    
-    // 2. Create download link
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
     const date = new Date().toISOString().slice(0, 10);
-    link.download = `FamilyCare_Backup_${date}.json`;
-    
-    // 3. Trigger download
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const filename = `FamilyCare_Backup_${date}.json`;
+
+    // 2. Download or native mobile share
+    const outcome = await downloadOrShareFile(
+      filename,
+      dataStr,
+      'application/json',
+      'Family Care Hub Encrypted Backup'
+    );
+
     const stampedAt = new Date().toISOString();
     localStorage.setItem(LAST_BACKUP_KEY, stampedAt);
     setLastBackup(stampedAt);
+    setBackupReminder(null);
 
-    // Optional: Show a tiny alert or toast
-    alert("Backup saved to your Downloads folder!");
+    if (outcome === 'downloaded') {
+      alert("Backup saved to your Downloads folder!");
+    }
   };
 
   // --- SHAREABLE EXPORT (unlocked, portable to another device/app) ---
@@ -252,26 +266,26 @@ const App: React.FC = () => {
     });
   };
 
-  const handleShareExport = () => {
+  const handleShareExport = async () => {
     if (sharing || shareSelection.size === 0) return;
     setSharing(true);
     try {
       const share = buildShareExport(state.people, state.medications, state.documents, Array.from(shareSelection));
       const dataStr = JSON.stringify(share, null, 2);
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
       const date = new Date().toISOString().slice(0, 10);
-      link.download = `FamilyCare_Share_${date}.json`;
+      const filename = `FamilyCare_Share_${date}.json`;
 
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const outcome = await downloadOrShareFile(
+        filename,
+        dataStr,
+        'application/json',
+        'Family Care Hub Shared Records'
+      );
 
       setShowSharePicker(false);
-      alert("Share file saved to your Downloads folder! Anyone with the app can import it -- no PIN needed.");
+      if (outcome === 'downloaded') {
+        alert("Share file saved to your Downloads folder! Anyone with the app can import it -- no PIN needed.");
+      }
     } finally {
       setSharing(false);
     }
@@ -293,6 +307,7 @@ const App: React.FC = () => {
         medications: result.medications,
         documents: result.documents,
       }));
+      triggerBackupReminder(`Imported ${result.counts.people} people. Backup recommended.`);
       alert(`Imported ${result.counts.people} people, ${result.counts.medications} medications, and ${result.counts.documents} documents.`);
     } catch (e) {
       if (e instanceof SyntaxError) {
@@ -391,6 +406,7 @@ const App: React.FC = () => {
           labelPhotoData: tempMedImage || m.labelPhotoData
         } : m)
       }));
+      triggerBackupReminder('Medication updated. Backup recommended.');
     } else {
       const newMed: Medication = {
         id: Date.now().toString(),
@@ -404,6 +420,7 @@ const App: React.FC = () => {
         ...prev,
         medications: [...prev.medications, newMed]
       }));
+      triggerBackupReminder('Medication added. Backup recommended.');
     }
 
     closeMedForm();
@@ -454,6 +471,7 @@ const App: React.FC = () => {
           p.id === editingId ? { ...p, ...formData } : p
         )
       }));
+      triggerBackupReminder('Profile updated. Backup recommended.');
     } else {
       const newPerson: Person = {
         id: Date.now().toString(),
@@ -463,6 +481,7 @@ const App: React.FC = () => {
         ...prev,
         people: [...prev.people, newPerson]
       }));
+      triggerBackupReminder('Profile created. Backup recommended.');
     }
 
     setShowPersonForm(false);
@@ -526,6 +545,7 @@ const App: React.FC = () => {
         onOpenSharePicker={openSharePicker}
         onImportShare={handleImportShare}
         importingShare={importingShare}
+        persistentStorageGranted={persistentStorageGranted}
       />
     );
   }
@@ -920,6 +940,36 @@ const App: React.FC = () => {
             <p className="text-sm text-mutedText mt-4 text-center">
               Scan for {activePerson.name}'s name, date of birth, medications and physician contact.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Post-Edit Backup Reminder Toast */}
+      {backupReminder?.show && !isViewLocked && (
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-50 bg-surface border border-accent/40 shadow-2xl rounded-2xl p-4 flex items-center justify-between gap-3 animate-slide-up backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-accent/10 rounded-xl text-accent shrink-0">
+              <Download className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-mainText">{backupReminder.message}</p>
+              <p className="text-xs text-mutedText">Save an encrypted copy in 1 tap</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleBackup}
+              className="px-3 py-1.5 bg-accent hover:opacity-90 text-white rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
+            >
+              Backup
+            </button>
+            <button
+              onClick={() => setBackupReminder(null)}
+              className="p-1.5 text-mutedText hover:text-mainText rounded-lg transition-colors"
+              aria-label="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}

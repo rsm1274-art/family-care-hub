@@ -51,3 +51,31 @@ export const commitSealed = (key: string, sealed: string): void => {
 export const saveSecure = async (key: string, value: unknown): Promise<void> => {
   commitSealed(key, await sealSecure(value));
 };
+
+/**
+ * Checks whether persistent storage is currently granted by the browser.
+ */
+export const checkStoragePersistence = async (): Promise<boolean> => {
+  if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.persisted === 'function') {
+    try {
+      return await navigator.storage.persisted();
+    } catch {
+      return false;
+    }
+  }
+  return false;
+};
+
+/**
+ * Requests persistent storage from the browser to prevent eviction on cache pressure.
+ */
+export const requestPersistentStorage = async (): Promise<boolean> => {
+  if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.persist === 'function') {
+    try {
+      return await navigator.storage.persist();
+    } catch {
+      return false;
+    }
+  }
+  return false;
+};

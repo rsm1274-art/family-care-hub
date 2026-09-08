@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { ChildProcess, fork } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -16,6 +16,55 @@ const store = new Store<ConfigSchema>({ name: 'family-care-hub' });
 const API_PORT = 4000;
 const DB_PORT = 5433;
 const LOCAL_SERVER_URL = `http://localhost:${API_PORT}`;
+const MAX_AUTO_BACKUPS = 10;
+
+function getBackupsDirectory(): string {
+  const docs = app.getPath('documents');
+  const backupDir = path.join(docs, 'Family Care Hub Backups');
+  if (!fs.existsSync(backupDir)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+  }
+  return backupDir;
+}
+
+async function performAutoBackup(): Promise<void> {
+  if (hostStatus.state !== 'ready') return;
+  try {
+    const res = await fetch(`${LOCAL_SERVER_URL}/api/internal/auto-export`);
+    if (!res.ok) return;
+    const backupJson = await res.json();
+
+    if (!backupJson || !Array.isArray(backupJson.people)) return;
+
+    const backupDir = getBackupsDirectory();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `FamilyCare_AutoBackup_${timestamp}.json`;
+    const filePath = path.join(backupDir, filename);
+
+    fs.writeFileSync(filePath, JSON.stringify(backupJson, null, 2), 'utf-8');
+    console.log(`[backup] Auto-backup written to ${filePath}`);
+
+    // Prune rolling backups beyond MAX_AUTO_BACKUPS
+    const files = fs
+      .readdirSync(backupDir)
+      .filter((f) => f.startsWith('FamilyCare_AutoBackup_') && f.endsWith('.json'))
+      .sort();
+
+    if (files.length > MAX_AUTO_BACKUPS) {
+      const toDelete = files.slice(0, files.length - MAX_AUTO_BACKUPS);
+      for (const file of toDelete) {
+        try {
+          fs.unlinkSync(path.join(backupDir, file));
+          console.log(`[backup] Pruned old backup: ${file}`);
+        } catch (e) {
+          console.error(`[backup] Failed to prune ${file}:`, e);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[backup] Auto-backup failed:', err);
+  }
+}
 
 export interface HostStatus {
   state: 'idle' | 'starting-db' | 'starting-api' | 'ready' | 'error';
@@ -216,6 +265,12 @@ ipcMain.handle('fch:start-local', async () => {
 
 ipcMain.handle('fch:get-host-status', () => hostStatus);
 
+ipcMain.handle('fch:open-backups-folder', async () => {
+  const dir = getBackupsDirectory();
+  await shell.openPath(dir);
+  return dir;
+});
+
 app.whenReady().then(async () => {
   createWindow();
 
@@ -251,6 +306,15 @@ app.on('before-quit', (event) => {
   if (apiProcess || pg) {
     event.preventDefault();
     quitting = true;
-    void stopHostStack().finally(() => app.quit());
+    (async () => {
+      try {
+        await performAutoBackup();
+      } catch (e) {
+        console.error('Error during auto-backup on quit:', e);
+      } finally {
+        await stopHostStack();
+        app.quit();
+      }
+    })();
   }
 });
