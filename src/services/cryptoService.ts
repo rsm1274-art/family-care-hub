@@ -10,7 +10,7 @@
 import { toBase64, fromBase64 } from './base64';
 import { generateDek, wrapDek, unwrapDek, readVault, writeVault } from './vault';
 import { generateRecoveryCode, normalizeRecoveryCode } from './recoveryCode';
-import { VAULT_STORAGE_KEY, type VaultDescriptor } from './vaultTypes';
+import { VAULT_STORAGE_KEY, type VaultDescriptor, type VaultSlot } from './vaultTypes';
 
 // Legacy v1 keys. Retained so isSetup() and the migration can detect old vaults.
 export const LEGACY_SALT_KEY = 'secure_health_salt';
@@ -90,6 +90,39 @@ export const cryptoService = {
       slots: { ...descriptor.slots, recovery: await wrapDek(dek, normalizeRecoveryCode(code)) },
     });
     return code;
+  },
+
+  // Lets another caregiver's device join THIS vault rather than create its
+  // own -- without this, two caregivers each running setupPin() get two
+  // different random DEKs, and ciphertext synced between them is simply
+  // undecryptable on the other end. The code is one-time, out-of-band
+  // (spoken, texted -- never stored in the cloud folder alongside it),
+  // wraps the *existing* DEK, and is meant to be read once by the joiner's
+  // own joinWithInvite call, not persisted anywhere.
+  createInvite: async (): Promise<{ code: string; slot: VaultSlot }> => {
+    const dek = requireUnlocked('invite a caregiver');
+    const code = generateRecoveryCode();
+    const slot = await wrapDek(dek, normalizeRecoveryCode(code));
+    return { code, slot };
+  },
+
+  // The joining device's own PIN and recovery code wrap this same DEK, so
+  // from here on both devices' ciphertext is mutually decryptable, just
+  // like two slots on one device already are.
+  joinWithInvite: async (slot: VaultSlot, code: string, pin: string): Promise<string> => {
+    const dek = await unwrapDek(slot, normalizeRecoveryCode(code));
+    const recoveryCode = generateRecoveryCode();
+
+    writeVault({
+      v: 2,
+      slots: {
+        pin: await wrapDek(dek, pin),
+        recovery: await wrapDek(dek, normalizeRecoveryCode(recoveryCode)),
+      },
+    });
+
+    sessionDek = dek;
+    return recoveryCode;
   },
 
   lock: (): void => {

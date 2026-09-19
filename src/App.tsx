@@ -15,8 +15,10 @@ import { needsMigration, migrateToV2 } from './services/migrateVault';
 import { RecoveryCodeModal } from './components/RecoveryCodeModal';
 import { RecoverAccess } from './components/RecoverAccess';
 import { buildShareExport, applyShareImport, isShareExport, downloadOrShareFile } from './services/shareExport';
-import { cloudSync } from './services/cloudSync/syncService';
+import { cloudSync, INVITE_FILE_NAME } from './services/cloudSync/syncService';
 import { createGoogleDriveProvider } from './services/cloudSync/googleDrive';
+import { JoinVaultModal } from './components/JoinVaultModal';
+import { InviteCodeModal } from './components/InviteCodeModal';
 
 // Storage Keys
 // Exported: Settings reads it to warn when the only copy of the data has no
@@ -67,6 +69,9 @@ const App: React.FC = () => {
   const [backupReminder, setBackupReminder] = useState<{ show: boolean; message: string } | null>(null);
   const [cloudConnected, setCloudConnected] = useState(false);
   const [cloudSyncing, setCloudSyncing] = useState(false);
+  const [showJoinVault, setShowJoinVault] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [lastCloudSync, setLastCloudSync] = useState<string | null>(null);
 
   const triggerBackupReminder = (message = 'Records updated. A quick backup will keep your changes safe.') => {
     setBackupReminder({ show: true, message });
@@ -147,6 +152,7 @@ const App: React.FC = () => {
               [STORAGE_KEY_MEDS]: sealedMeds,
               [STORAGE_KEY_DOCS]: sealedDocs,
             })
+            .then(() => setLastCloudSync(new Date().toISOString()))
             .catch((e) => console.error('Cloud sync push failed', e));
         }
       } catch (e) {
@@ -194,6 +200,7 @@ const App: React.FC = () => {
     if (cloudSync.isConnected()) {
       try {
         await cloudSync.pullNewer([STORAGE_KEY_PEOPLE, STORAGE_KEY_MEDS, STORAGE_KEY_DOCS]);
+        setLastCloudSync(new Date().toISOString());
       } catch (e) {
         console.error('Cloud sync pull failed', e);
       }
@@ -400,6 +407,45 @@ const App: React.FC = () => {
     setCloudConnected(false);
   };
 
+  // Wraps the live DEK with a fresh one-time code and drops it in the shared
+  // Drive folder for a new caregiver's joinWithInvite to pick up. Shown once,
+  // like the recovery code -- it is not saved anywhere in this app either.
+  const handleInviteCaregiver = async (): Promise<void> => {
+    const provider = cloudSync.getProvider();
+    if (!provider) {
+      alert('Connect Google Drive first.');
+      return;
+    }
+    try {
+      const { code, slot } = await cryptoService.createInvite();
+      await provider.writeFile(INVITE_FILE_NAME, JSON.stringify(slot));
+      setInviteCode(code);
+    } catch (e) {
+      console.error('Failed to create invite', e);
+      alert('Could not create an invite. Please try again.');
+    }
+  };
+
+  // Reads the invite left by handleInviteCaregiver above and joins this
+  // device to that same DEK -- from here on this device's ciphertext is
+  // decryptable by every other caregiver on the shared folder, and theirs by
+  // this one.
+  const handleJoinVault = async (code: string, pin: string): Promise<string | null> => {
+    const provider = cloudSync.getProvider();
+    if (!provider) return 'Connect Google Drive first.';
+    try {
+      const raw = await provider.readFile(INVITE_FILE_NAME);
+      if (!raw) return 'No invite found in the connected Drive folder.';
+      const slot = JSON.parse(raw);
+      setRecoveryCode(await cryptoService.joinWithInvite(slot, code, pin));
+      setShowJoinVault(false);
+      return null;
+    } catch (e) {
+      console.error('Join vault failed', e);
+      return 'That invite code was not accepted.';
+    }
+  };
+
   // --- Medication Form Logic ---
   const [showMedForm, setShowMedForm] = useState(false);
   const [editingMedId, setEditingMedId] = useState<string | null>(null);
@@ -569,6 +615,10 @@ const App: React.FC = () => {
     return <RecoveryCodeModal code={recoveryCode} onConfirmed={handleRecoveryCodeSaved} />;
   }
 
+  if (inviteCode) {
+    return <InviteCodeModal code={inviteCode} onClose={() => setInviteCode(null)} />;
+  }
+
   if (isViewLocked) {
     if (showRecovery) {
       return (
@@ -578,7 +628,25 @@ const App: React.FC = () => {
         />
       );
     }
-    return <PinPad onUnlock={handleUnlock} onForgotPin={() => setShowRecovery(true)} />;
+    return (
+      <>
+        <PinPad
+          onUnlock={handleUnlock}
+          onForgotPin={() => setShowRecovery(true)}
+          onJoinVault={() => setShowJoinVault(true)}
+          cloudSyncAvailable={Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID)}
+        />
+        {showJoinVault && (
+          <JoinVaultModal
+            cloudConnected={cloudConnected}
+            cloudSyncing={cloudSyncing}
+            onConnectGoogleDrive={handleConnectGoogleDrive}
+            onJoin={handleJoinVault}
+            onCancel={() => setShowJoinVault(false)}
+          />
+        )}
+      </>
+    );
   }
 
   if (state.view === ViewState.SCAN_MEDICATION) {
@@ -607,6 +675,8 @@ const App: React.FC = () => {
         cloudSyncing={cloudSyncing}
         onConnectGoogleDrive={handleConnectGoogleDrive}
         onDisconnectCloud={handleDisconnectCloud}
+        onInviteCaregiver={handleInviteCaregiver}
+        lastCloudSync={lastCloudSync}
       />
     );
   }

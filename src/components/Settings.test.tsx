@@ -22,6 +22,8 @@ const renderSettings = (lastBackup: string | null) =>
       cloudSyncing={false}
       onConnectGoogleDrive={NOOP_ASYNC}
       onDisconnectCloud={NOOP_ASYNC}
+      onInviteCaregiver={NOOP_ASYNC}
+      lastCloudSync={null}
     />,
   );
 

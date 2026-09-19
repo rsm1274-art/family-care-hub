@@ -56,9 +56,21 @@ To enable it in your own deployment:
 3. Without that variable set, the cloud sync section in Settings does not
    appear -- the app behaves exactly as the fully local version.
 
-To add a second caregiver: connect the same Google account on both devices,
-or share the "Family Care Hub Data" folder Drive creates with another
-caregiver's Google account via Drive's own sharing, then have them connect.
+To add a second caregiver:
+
+1. Share the "Family Care Hub Data" folder Drive creates with their Google
+   account, using Drive's own sharing.
+2. In Settings, tap **Invite Another Caregiver**. You'll get a one-time
+   invite code -- share it with them directly (text, call, in person), not
+   through Drive or anywhere public.
+3. On their device, at PIN setup, they tap **"Joining a caregiver who
+   already set this up?"**, connect the same shared Drive folder, and enter
+   the code, then choose their own PIN.
+
+This step matters, not just the folder share: without it, their device would
+generate its own random encryption key and be unable to read your records at
+all, even with the ciphertext file sitting right there. The invite code is
+what makes the two devices use the same key.
 
 ---
 

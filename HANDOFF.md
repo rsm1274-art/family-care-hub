@@ -46,11 +46,25 @@ setup.
   Cloud OAuth client ID). Unset, the feature is simply not offered — no
   behavior change from v1.
 
+**Also done:** the invite/DEK-sharing flow. Without it, two caregivers each
+running `setupPin()` independently would generate two different random DEKs,
+and ciphertext synced between their devices would be undecryptable on the
+other end -- syncing files alone was not enough for real multi-caregiver
+access. `cryptoService.createInvite()` wraps the live DEK with a fresh
+one-time code and drops it (as `fch_invite` in the shared Drive folder);
+`cryptoService.joinWithInvite()` unwraps it and re-wraps the *same* DEK under
+the joining device's own new PIN and recovery code, so every caregiver's
+device shares one DEK from then on. UI: Settings → "Invite Another
+Caregiver" (`InviteCodeModal`) on the inviting side, and "Joining a caregiver
+who already set this up?" on the PIN-setup screen → `JoinVaultModal` on the
+joining side.
+
 **Not yet done:** iCloud / OneDrive / Dropbox providers (the interface
-supports them; only Drive is implemented), and a proper DEK re-wrap-per-
-caregiver flow -- today all caregivers on a shared Drive folder use the same
-device PIN model per device, which is fine for a household but not yet a
-distinct "invite a caregiver" flow.
+supports them; only Drive is implemented). The joining caregiver's Google
+account must already have the "Family Care Hub Data" Drive folder shared
+with them (via Drive's own sharing UI) before their invite code will find
+`fch_invite` there -- the app does not (and, as a bring-your-own-storage
+design, should not) attempt to automate that share itself.
 
 ---
 
@@ -98,12 +112,13 @@ Cloud sync only activates when `VITE_GOOGLE_CLIENT_ID` is set (see README).
 1. Add an iCloud (CloudKit JS) `CloudProvider` implementation as the second
    supported provider (README lists it as a v2.0 goal for iPhone-only
    families).
-2. Design a real "invite a caregiver" flow: a setup code plus a per-caregiver
-   wrapped DEK, rather than relying on caregivers sharing one PIN's worth of
-   trust through a shared Drive folder.
-3. Surface sync status/errors in the UI beyond `alert()` — a small
-   "last synced" indicator in Settings, matching the existing "Last backup"
-   pattern.
-4. Manual end-to-end test: two devices, same Google account (or a shared
-   Drive folder across two accounts), confirm a record added on one appears
-   on the other after unlock.
+2. Surface sync errors in the UI beyond `alert()` -- a small inline status
+   (e.g. "sync failed, will retry") rather than a blocking dialog.
+3. Manual end-to-end test with a real Google Cloud OAuth client ID: two
+   devices, one inviting the other via the new invite flow, confirm a record
+   added on one appears on the other after unlock, and confirm revoking
+   Drive folder access on Google's side actually cuts the second device off.
+4. Consider invite expiry/retirement: `fch_invite` currently sits in the
+   Drive folder indefinitely after being created, reusable by anyone who
+   later gets both folder access and the (out-of-band) code. Retiring it
+   after first use (like the recovery code already does) would tighten this.

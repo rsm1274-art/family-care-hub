@@ -209,3 +209,51 @@ describe('vault-backed key management', () => {
     expect(JSON.parse(await cryptoService.encrypt('x')).v).toBe(2);
   });
 });
+
+describe('shared-vault invites', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    cryptoService.lock();
+  });
+
+  it('lets a second device decrypt records sealed on the inviting device', async () => {
+    await cryptoService.setupPin('111111');
+    const sealed = await cryptoService.encrypt('allergies: penicillin');
+    const { code, slot } = await cryptoService.createInvite();
+
+    localStorage.clear();
+    cryptoService.lock();
+    await cryptoService.joinWithInvite(slot, code, '222222');
+
+    await expect(cryptoService.decrypt(sealed)).resolves.toBe('allergies: penicillin');
+  });
+
+  it('rejects an invalid invite code', async () => {
+    await cryptoService.setupPin('111111');
+    const { slot } = await cryptoService.createInvite();
+
+    localStorage.clear();
+    cryptoService.lock();
+    await expect(
+      cryptoService.joinWithInvite(slot, 'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-2345-6789', '222222'),
+    ).rejects.toThrow();
+  });
+
+  it('gives the joining device its own working PIN and recovery code', async () => {
+    await cryptoService.setupPin('111111');
+    const { code, slot } = await cryptoService.createInvite();
+
+    localStorage.clear();
+    cryptoService.lock();
+    const recoveryCode = await cryptoService.joinWithInvite(slot, code, '222222');
+    cryptoService.lock();
+
+    expect(await cryptoService.unlock('222222')).toBe(true);
+    cryptoService.lock();
+    expect(await cryptoService.unlockWithRecovery(recoveryCode)).toBe(true);
+  });
+
+  it('refuses to create an invite while locked', async () => {
+    await expect(cryptoService.createInvite()).rejects.toThrow(/locked/i);
+  });
+});

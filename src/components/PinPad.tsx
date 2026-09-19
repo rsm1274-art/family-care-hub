@@ -13,9 +13,13 @@ interface PinPadProps {
    */
   onUnlock: (pin: string, wasSetup: boolean) => Promise<boolean>;
   onForgotPin: () => void;
+  /** Opens the "join an existing caregiver's vault" flow instead of creating a new one. */
+  onJoinVault: () => void;
+  /** Whether this deployment has cloud sync configured at all. */
+  cloudSyncAvailable: boolean;
 }
 
-export const PinPad: React.FC<PinPadProps> = ({ onUnlock, onForgotPin }) => {
+export const PinPad: React.FC<PinPadProps> = ({ onUnlock, onForgotPin, onJoinVault, cloudSyncAvailable }) => {
   const [pin, setPin] = useState<string>('');
   const [isSetupMode, setIsSetupMode] = useState<boolean>(!cryptoService.isSetup());
   const [confirmPin, setConfirmPin] = useState<string | null>(null);
@@ -166,6 +170,15 @@ export const PinPad: React.FC<PinPadProps> = ({ onUnlock, onForgotPin }) => {
                   Restore from Backup
                 </button>
              </div>
+
+             {!confirmPin && cloudSyncAvailable && (
+               <button
+                 onClick={onJoinVault}
+                 className="text-sm text-mutedText underline hover:text-mainText"
+               >
+                 Joining a caregiver who already set this up?
+               </button>
+             )}
            </div>
         ) : (
           <p className="text-mutedText text-sm text-center max-w-xs">

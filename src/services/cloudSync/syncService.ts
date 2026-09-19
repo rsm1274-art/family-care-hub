@@ -1,5 +1,10 @@
 import type { CloudProvider } from './types';
 
+// Name of the file an invite's wrapped DEK is written under in the shared
+// folder. Not sensitive on its own -- it's useless without the one-time
+// invite code, which travels out-of-band and is never written here.
+export const INVITE_FILE_NAME = 'fch_invite';
+
 // Which cloud file each local record last synced from/to, so pullNewer only
 // re-downloads when the cloud copy has actually moved on.
 const syncedAtKey = (key: string): string => `${key}__synced_at`;

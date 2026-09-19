@@ -20,6 +20,9 @@ interface SettingsProps {
   cloudSyncing: boolean;
   onConnectGoogleDrive: () => Promise<void>;
   onDisconnectCloud: () => Promise<void>;
+  onInviteCaregiver: () => Promise<void>;
+  /** ISO timestamp of the last successful cloud push or pull, or null if never. */
+  lastCloudSync: string | null;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -36,8 +39,11 @@ export const Settings: React.FC<SettingsProps> = ({
   cloudConnected,
   cloudSyncing,
   onConnectGoogleDrive,
-  onDisconnectCloud
+  onDisconnectCloud,
+  onInviteCaregiver,
+  lastCloudSync
 }) => {
+  const [inviting, setInviting] = useState(false);
   const shareFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleShareFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -225,12 +231,36 @@ export const Settings: React.FC<SettingsProps> = ({
             </p>
 
             {cloudConnected ? (
-              <button
-                onClick={() => void onDisconnectCloud()}
-                className="flex items-center gap-2 text-sm text-mutedText hover:text-mainText font-medium px-4 py-2 rounded-lg border border-borderColor hover:bg-surface-hover transition-colors"
-              >
-                <CloudOff className="w-4 h-4" /> Disconnect Google Drive
-              </button>
+              <div className="space-y-3">
+                <p className="text-sm text-mutedText">
+                  {lastCloudSync
+                    ? `Last synced: ${new Date(lastCloudSync).toLocaleString()}`
+                    : 'Connected. Waiting for the first sync.'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={async () => {
+                      setInviting(true);
+                      try {
+                        await onInviteCaregiver();
+                      } finally {
+                        setInviting(false);
+                      }
+                    }}
+                    disabled={inviting}
+                    className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-500 font-medium px-4 py-2 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/10 transition-colors disabled:opacity-60"
+                  >
+                    {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
+                    {inviting ? 'Creating…' : 'Invite Another Caregiver'}
+                  </button>
+                  <button
+                    onClick={() => void onDisconnectCloud()}
+                    className="flex items-center gap-2 text-sm text-mutedText hover:text-mainText font-medium px-4 py-2 rounded-lg border border-borderColor hover:bg-surface-hover transition-colors"
+                  >
+                    <CloudOff className="w-4 h-4" /> Disconnect
+                  </button>
+                </div>
+              </div>
             ) : (
               <button
                 onClick={() => void onConnectGoogleDrive()}
