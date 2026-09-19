@@ -1,36 +1,56 @@
 # Family Care Hub — Session Handoff & Project State
 
-**Last Updated:** September 7, 2026  
-**Active Branch:** `main`  
+**Last Updated:** September 19, 2026
+**Active Branch:** `claude/gallant-darwin-uxtn1h`
 **Repository:** [`rsm1274-art/family-care-hub`](https://github.com/rsm1274-art/family-care-hub)
 
 ---
 
 ## 1. Project Overview
 
-Family Care Hub is a **zero-knowledge, local-first** application built for family caregivers to securely store and quickly retrieve critical medical profiles, medications, insurance cards, and emergency responder QR summaries without relying on central cloud servers.
+Family Care Hub is a **local-first** app for family caregivers to securely
+store and quickly retrieve critical medical profiles, medications, insurance
+cards, and emergency-responder QR summaries. It is a single PWA: React +
+TypeScript + Vite + Tailwind CSS, with AES-256-GCM / PBKDF2 client-side vault
+encryption in browser storage.
 
-The repository contains two sibling implementations designed to interoperate via JSON export/import:
-1. **Mobile / Web PWA (`/`)**: React + TypeScript + Vite + Tailwind CSS with AES-256-GCM / PBKDF2 client-side vault encryption in browser storage.
-2. **Desktop Application (`DT/`)**: Electron + Express + Prisma + embedded local PostgreSQL 17 database packaged with NSIS installer.
+The previous `DT/` Electron + Express + Prisma + embedded-Postgres desktop
+app has been **removed**. It was an unrelated, unmaintained parallel
+implementation that contradicted this app's "no server" model; the PWA
+already installs and runs offline on desktop via the browser.
 
 ---
 
-## 2. Recent Updates & Completed Work
+## 2. v2.0: Cloud Sync (bring-your-own-storage)
 
-### 📱 Mobile PWA Hardening & Usability
-* **Storage Protection**: Integrated the Web Persistent Storage API (`checkStoragePersistence` & `requestPersistentStorage`) on unlock/setup to prevent mobile browsers (iOS Safari / Android Chrome) from evicting records under storage pressure.
-* **Storage Status UI**: Added persistent storage status indicators under **Settings $\rightarrow$ Data Security & Backup**.
-* **Native Web Share Sheet**: Implemented `downloadOrShareFile()` using `navigator.share({ files: [...] })` with fallback to standard downloads. Caregivers can save backups directly to **iCloud Drive**, **Google Drive**, **Files**, or **AirDrop** in 1 tap.
-* **Post-Edit Backup Reminders**: Added a non-intrusive floating toast that prompts the caregiver to save an updated backup whenever people, medications, or documents are added/edited/imported.
-* **Test Suite**: 89/89 passing unit & integration tests covering crypto, migration, vault serialization, and export sharing.
+Multi-caregiver shared access was the one gap in the local-only v1 model. v2
+closes it **without introducing a backend this project operates**: each
+family links their own Google Drive account, and the app writes the same
+already-encrypted ciphertext it writes to `localStorage` into a folder in
+that account. See `README.md` → "Cloud sync" for user-facing details and
+setup.
 
-### 💻 Desktop App (`DT/`) Backup Automation
-* **Automated On-Exit Backups**: Electron's `before-quit` lifecycle automatically exports a full household database snapshot (including photos) to:  
-  `%USERPROFILE%\Documents\Family Care Hub Backups\FamilyCare_AutoBackup_YYYY-MM-DD_HHmmss.json`
-* **Rolling Backup Retention**: Retains the last 10 auto-backups and prunes older automated snapshots.
-* **Internal Loopback Export**: Added `/api/internal/auto-export` in Express to support zero-token host-level snapshots.
-* **Explorer Integration**: Added an **"Open Backups Folder"** button in Desktop Settings using Electron IPC (`fch:open-backups-folder` $\rightarrow$ `shell.openPath`).
+- `src/services/cloudSync/types.ts` — `CloudProvider` interface (pluggable;
+  Google Drive is the first implementation, others can follow the same
+  shape).
+- `src/services/cloudSync/googleDrive.ts` — Google Drive implementation via
+  Google Identity Services (OAuth token client) + Drive REST API, scoped to
+  `drive.file` (only files this app creates, not the whole Drive).
+- `src/services/cloudSync/syncService.ts` — orchestration: `connect`,
+  `disconnect`, `pushAll` (writes sealed ciphertext after every local save),
+  `pullNewer` (pulls remote files newer than this device's last sync, run
+  before decrypting on unlock/connect).
+- Wired into `App.tsx`'s existing save effect and `loadRecords`, and into a
+  new "Sync Across Caregivers" section in `Settings.tsx`.
+- Requires `VITE_GOOGLE_CLIENT_ID` at build time (a deployer-owned Google
+  Cloud OAuth client ID). Unset, the feature is simply not offered — no
+  behavior change from v1.
+
+**Not yet done:** iCloud / OneDrive / Dropbox providers (the interface
+supports them; only Drive is implemented), and a proper DEK re-wrap-per-
+caregiver flow -- today all caregivers on a shared Drive folder use the same
+device PIN model per device, which is fine for a household but not yet a
+distinct "invite a caregiver" flow.
 
 ---
 
@@ -40,54 +60,50 @@ The repository contains two sibling implementations designed to interoperate via
 family-care-hub/
 ├── HANDOFF.md                       # This handoff file
 ├── README.md                        # PWA overview, security claims & local dev
-├── package.json                     # Root PWA scripts and dependencies
+├── package.json                     # Scripts and dependencies
 ├── vite.config.ts / tsconfig.json   # Vite & TypeScript build configs
 ├── public/                          # PWA manifest, service worker & app icons
-├── src/                             # PWA Frontend Source
-│   ├── App.tsx                      # Root state machine, forms & backup wiring
-│   ├── types.ts                     # PWA data models (Person, Medication, Document)
-│   ├── components/                  # PinPad, Dashboard, PersonDetail, Scanner, Settings, Terms
-│   └── services/                    # Crypto, secureStorage, shareExport, vault, recoveryCode
-│
-└── DT/                              # Desktop App (npm workspaces)
-    ├── package.json                 # Workspaces config (electron-shell, renderer, server, shared-types)
-    ├── PROGRESS.md                  # Desktop architecture & milestone tracker
-    ├── CaregiverPainPoints.md       # Caregiver UX rationale & requirements
-    ├── docs/                        # Household onboarding & setup guides
-    └── packages/
-        ├── electron-shell/          # Electron main process, embedded Postgres 17 launcher, IPC
-        ├── renderer/                # Desktop React frontend UI
-        ├── server/                  # Express 5 + Prisma API (routes: auth, people, meds, docs, backup)
-        └── shared-types/            # Shared TypeScript DTOs across server & renderer
+└── src/                             # PWA Frontend Source
+    ├── App.tsx                      # Root state machine, forms & backup/sync wiring
+    ├── types.ts                     # Data models (Person, Medication, Document)
+    ├── vite-env.d.ts                # VITE_GOOGLE_CLIENT_ID env typing
+    ├── components/                  # PinPad, Dashboard, PersonDetail, Scanner, Settings, Terms
+    └── services/
+        ├── cryptoService.ts, vault.ts, vaultTypes.ts, secureStorage.ts
+        ├── migrateVault.ts, recoveryCode.ts, shareExport.ts, base64.ts
+        └── cloudSync/               # Bring-your-own-cloud sync (v2.0)
+            ├── types.ts
+            ├── googleDrive.ts
+            └── syncService.ts
 ```
 
 ---
 
 ## 4. Development & Build Commands
 
-### Mobile PWA (Root)
 ```bash
 npm install              # Install dependencies
 npm run dev              # Start Vite dev server on http://localhost:5173
-npm test                 # Run vitest suite (89 tests)
-npm run build            # Typecheck (tsc) and compile production bundle
+npm test                 # Run vitest suite
+npm run build             # Typecheck (tsc) and compile production bundle
+npm run lint              # ESLint
 ```
 
-### Desktop Application (`DT/`)
-```bash
-# In DT/ directory:
-npm run build:all        # Build shared-types, server, renderer, and electron-shell
-npm run dev:server       # Start Express API on :4000 (watch mode)
-npm run dev:renderer     # Start Vite desktop renderer
-npm run electron         # Launch dev Electron window
-npm run dist:win         # Build packaged Windows installer (.exe in release/)
-```
+Cloud sync only activates when `VITE_GOOGLE_CLIENT_ID` is set (see README).
 
 ---
 
 ## 5. Next Session Roadmap & Recommendations
 
-1. **Clean-VM Installer Smoke Test**: Test the packaged Windows installer (`Family Care Hub Setup 1.0.0.exe`) on a clean Windows VM to confirm embedded Postgres initialization, first-time setup, and shutdown backup creation.
-2. **Mobile $\leftrightarrow$ Desktop Share File Round-Trip**: Test exporting a person record with medication and document photos from Mobile PWA, importing into Desktop, and vice-versa.
-3. **Optional Quick-Lock PIN Screen**: Consider adding a manual "Lock Now" button on the Dashboard for immediate screen locking without closing the browser.
-4. **Offline Styling Bundling**: Ensure all Tailwind utilities are fully bundled in the desktop renderer so the UI renders styled even when the PC has zero internet connectivity.
+1. Add an iCloud (CloudKit JS) `CloudProvider` implementation as the second
+   supported provider (README lists it as a v2.0 goal for iPhone-only
+   families).
+2. Design a real "invite a caregiver" flow: a setup code plus a per-caregiver
+   wrapped DEK, rather than relying on caregivers sharing one PIN's worth of
+   trust through a shared Drive folder.
+3. Surface sync status/errors in the UI beyond `alert()` — a small
+   "last synced" indicator in Settings, matching the existing "Last backup"
+   pattern.
+4. Manual end-to-end test: two devices, same Google account (or a shared
+   Drive folder across two accounts), confirm a record added on one appears
+   on the other after unlock.

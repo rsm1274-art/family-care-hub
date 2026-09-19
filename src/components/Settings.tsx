@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import type { SettingsState } from '../types';
-import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info, AlertTriangle, Share2, Loader2 } from 'lucide-react';
+import { Moon, Sun, Type, FileText, ArrowLeft, Download, Upload, Shield, Info, AlertTriangle, Share2, Loader2, Cloud, CloudOff } from 'lucide-react';
 
 interface SettingsProps {
   settings: SettingsState;
@@ -14,6 +14,12 @@ interface SettingsProps {
   onImportShare: (file: File) => Promise<void>;
   importingShare: boolean;
   persistentStorageGranted?: boolean;
+  /** Whether this deployment has a Google OAuth client ID configured at all. */
+  cloudSyncAvailable: boolean;
+  cloudConnected: boolean;
+  cloudSyncing: boolean;
+  onConnectGoogleDrive: () => Promise<void>;
+  onDisconnectCloud: () => Promise<void>;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -25,7 +31,12 @@ export const Settings: React.FC<SettingsProps> = ({
   onOpenSharePicker,
   onImportShare,
   importingShare,
-  persistentStorageGranted
+  persistentStorageGranted,
+  cloudSyncAvailable,
+  cloudConnected,
+  cloudSyncing,
+  onConnectGoogleDrive,
+  onDisconnectCloud
 }) => {
   const shareFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -194,6 +205,44 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
           </div>
         </div>
+
+        {/* --- CLOUD SYNC (bring-your-own-storage) --- */}
+        {cloudSyncAvailable && (
+          <div className="bg-surface rounded-2xl p-6 shadow-sm border border-borderColor">
+            <div className="flex items-center gap-3 mb-4 text-emerald-500">
+              <div className="p-2 bg-emerald-500/10 rounded-lg">
+                {cloudConnected ? <Cloud className="w-5 h-5" /> : <CloudOff className="w-5 h-5" />}
+              </div>
+              <h2 className="text-lg font-bold">Sync Across Caregivers</h2>
+            </div>
+
+            <p className="text-sm text-mainText/80 leading-relaxed mb-4">
+              Link your own Google Drive to keep records in sync between everyone who cares for
+              this person. Records are encrypted on this device <strong>before</strong> they ever
+              reach Drive -- Google, and we, only ever see unreadable ciphertext. The files live in
+              a folder in your own Drive; share that folder with another caregiver the normal Drive
+              way to give them access.
+            </p>
+
+            {cloudConnected ? (
+              <button
+                onClick={() => void onDisconnectCloud()}
+                className="flex items-center gap-2 text-sm text-mutedText hover:text-mainText font-medium px-4 py-2 rounded-lg border border-borderColor hover:bg-surface-hover transition-colors"
+              >
+                <CloudOff className="w-4 h-4" /> Disconnect Google Drive
+              </button>
+            ) : (
+              <button
+                onClick={() => void onConnectGoogleDrive()}
+                disabled={cloudSyncing}
+                className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-500 font-medium px-4 py-2 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/10 transition-colors disabled:opacity-60"
+              >
+                {cloudSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
+                {cloudSyncing ? 'Connecting…' : 'Connect Google Drive'}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Display Settings */}
         <div className="bg-surface rounded-2xl p-6 shadow-sm border border-borderColor">

@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Build-time secrets (e.g. VITE_GOOGLE_CLIENT_ID). .env.example stays tracked.
+.env
+.env.*
+!.env.example
+
 # TypeScript build info (emitted by `tsc -b` in the build script)
 *.tsbuildinfo
 

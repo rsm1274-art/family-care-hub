@@ -15,6 +15,8 @@ import { needsMigration, migrateToV2 } from './services/migrateVault';
 import { RecoveryCodeModal } from './components/RecoveryCodeModal';
 import { RecoverAccess } from './components/RecoverAccess';
 import { buildShareExport, applyShareImport, isShareExport, downloadOrShareFile } from './services/shareExport';
+import { cloudSync } from './services/cloudSync/syncService';
+import { createGoogleDriveProvider } from './services/cloudSync/googleDrive';
 
 // Storage Keys
 // Exported: Settings reads it to warn when the only copy of the data has no
@@ -63,6 +65,8 @@ const App: React.FC = () => {
   const [showRecovery, setShowRecovery] = useState(false);
   const [persistentStorageGranted, setPersistentStorageGranted] = useState(false);
   const [backupReminder, setBackupReminder] = useState<{ show: boolean; message: string } | null>(null);
+  const [cloudConnected, setCloudConnected] = useState(false);
+  const [cloudSyncing, setCloudSyncing] = useState(false);
 
   const triggerBackupReminder = (message = 'Records updated. A quick backup will keep your changes safe.') => {
     setBackupReminder({ show: true, message });
@@ -132,6 +136,19 @@ const App: React.FC = () => {
         commitSealed(STORAGE_KEY_PEOPLE, sealedPeople);
         commitSealed(STORAGE_KEY_MEDS, sealedMeds);
         commitSealed(STORAGE_KEY_DOCS, sealedDocs);
+
+        // Best-effort: the linked cloud folder holds the same ciphertext that
+        // just landed in localStorage. A failed push leaves this device's
+        // copy intact and is retried on the next edit.
+        if (cloudSync.isConnected()) {
+          cloudSync
+            .pushAll({
+              [STORAGE_KEY_PEOPLE]: sealedPeople,
+              [STORAGE_KEY_MEDS]: sealedMeds,
+              [STORAGE_KEY_DOCS]: sealedDocs,
+            })
+            .catch((e) => console.error('Cloud sync push failed', e));
+        }
       } catch (e) {
         console.error("Failed to save to local storage", e);
       }
@@ -170,6 +187,17 @@ const App: React.FC = () => {
     let loadedPeople: Person[] = [];
     let loadedMeds: Medication[] = [];
     let loadedDocs: Document[] = [];
+
+    // Pull whatever another caregiver's device has written since this device
+    // last synced, before decrypting -- otherwise a stale local copy would
+    // look authoritative and the next save would push it back over theirs.
+    if (cloudSync.isConnected()) {
+      try {
+        await cloudSync.pullNewer([STORAGE_KEY_PEOPLE, STORAGE_KEY_MEDS, STORAGE_KEY_DOCS]);
+      } catch (e) {
+        console.error('Cloud sync pull failed', e);
+      }
+    }
 
     try {
       loadedPeople = await loadSecure<Person[]>(STORAGE_KEY_PEOPLE, []);
@@ -342,6 +370,34 @@ const App: React.FC = () => {
 
   const handleUpdateSettings = (newSettings: SettingsState) => {
     setState(prev => ({ ...prev, settings: newSettings }));
+  };
+
+  // --- CLOUD SYNC (bring-your-own-storage; no server of ours involved) ---
+  const handleConnectGoogleDrive = async () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      alert('Cloud sync is not configured for this deployment.');
+      return;
+    }
+    setCloudSyncing(true);
+    try {
+      await cloudSync.connect(createGoogleDriveProvider(clientId));
+      setCloudConnected(true);
+      // A vault opened on another device may have moved on since this one
+      // last saw it; pull that in immediately rather than waiting for the
+      // next unlock.
+      if (cryptoService.isUnlocked()) await loadRecords();
+    } catch (e) {
+      console.error('Google Drive connection failed', e);
+      alert('Could not connect to Google Drive. Please try again.');
+    } finally {
+      setCloudSyncing(false);
+    }
+  };
+
+  const handleDisconnectCloud = async () => {
+    await cloudSync.disconnect();
+    setCloudConnected(false);
   };
 
   // --- Medication Form Logic ---
@@ -546,6 +602,11 @@ const App: React.FC = () => {
         onImportShare={handleImportShare}
         importingShare={importingShare}
         persistentStorageGranted={persistentStorageGranted}
+        cloudSyncAvailable={Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID)}
+        cloudConnected={cloudConnected}
+        cloudSyncing={cloudSyncing}
+        onConnectGoogleDrive={handleConnectGoogleDrive}
+        onDisconnectCloud={handleDisconnectCloud}
       />
     );
   }
