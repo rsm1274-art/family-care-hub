@@ -7,8 +7,9 @@
 A local-first app for caregivers to keep critical medical information for the
 people they look after, available fast in an emergency.
 
-**Everything stays on your device.** There is no server, no account, and no
-sync. Nothing you enter is transmitted anywhere.
+**Everything stays on your device by default.** There is no server and no
+account required. If you turn on cloud sync (below), your own cloud storage
+account -- never one we operate -- is what carries data between your devices.
 
 ---
 
@@ -26,6 +27,38 @@ Other scripts: `npm test` (vitest), `npm run build` (typecheck + build),
 
 The dev server binds to localhost. For testing on a phone on your own network,
 opt in per run with `npm run dev -- --host`.
+
+---
+
+## Cloud sync (optional, bring-your-own-storage)
+
+Multiple caregivers can share the same records by linking a cloud storage
+account they already have. There is no backend operated by this project:
+every record is encrypted on-device (same AES-256-GCM vault described below)
+*before* it is written to the cloud, so the storage provider -- and anyone
+deploying this app -- only ever sees ciphertext.
+
+Currently implemented: **Google Drive** (`src/services/cloudSync/googleDrive.ts`),
+via the narrow `drive.file` scope, which only grants access to a folder this
+app creates -- not your whole Drive. The `CloudProvider` interface in
+`src/services/cloudSync/types.ts` is written so other providers (iCloud,
+OneDrive, Dropbox) can be added the same way.
+
+To enable it in your own deployment:
+
+1. Create a Google Cloud project and an OAuth 2.0 **Web application** client
+   ID (Google Cloud Console → APIs & Services → Credentials). Add your
+   deployed origin (and `http://localhost:5173` for local dev) under
+   "Authorized JavaScript origins".
+2. Set `VITE_GOOGLE_CLIENT_ID` to that client ID when building (e.g. in a
+   `.env` file, or as a build-time environment variable in your host's
+   settings).
+3. Without that variable set, the cloud sync section in Settings does not
+   appear -- the app behaves exactly as the fully local version.
+
+To add a second caregiver: connect the same Google account on both devices,
+or share the "Family Care Hub Data" folder Drive creates with another
+caregiver's Google account via Drive's own sharing, then have them connect.
 
 ---
 
@@ -64,6 +97,16 @@ implement is not listed.
 - The export is **encrypted** — it is the same ciphertext, plus the wrapped keys
   needed to open it. It is safe to keep on a cloud drive or USB stick.
 - A restored backup opens only with the PIN that was in use when it was taken.
+
+### Cloud sync
+- If enabled, the same ciphertext already written to `localStorage` is copied
+  to a folder in **your own** cloud storage account. Nothing is decrypted
+  before it leaves the device, and nothing is decrypted by the storage
+  provider or by whoever is hosting this app -- the DEK never leaves your
+  devices' memory.
+- Whoever can sign in to that cloud account, or that you share the folder
+  with, can read (still-encrypted) copies of your records and could delete
+  them. Treat access to that account with the same care as the device itself.
 
 ### Emergency QR code
 - The emergency QR encodes the selected person's name, date of birth,

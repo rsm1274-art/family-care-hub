@@ -17,6 +17,11 @@ const renderSettings = (lastBackup: string | null) =>
       onOpenSharePicker={NOOP}
       onImportShare={NOOP_ASYNC}
       importingShare={false}
+      cloudSyncAvailable={false}
+      cloudConnected={false}
+      cloudSyncing={false}
+      onConnectGoogleDrive={NOOP_ASYNC}
+      onDisconnectCloud={NOOP_ASYNC}
     />,
   );
 
