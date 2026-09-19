@@ -189,5 +189,14 @@ export const createGoogleDriveProvider = (clientId: string): CloudProvider => {
       );
       if (!res.ok) throw new Error(`Drive create failed: ${res.status}`);
     },
+
+    deleteFile: async (name: string): Promise<void> => {
+      const existing = await findFile(name);
+      if (!existing) return;
+      const res = await authedFetch(`https://www.googleapis.com/drive/v3/files/${existing.id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok && res.status !== 404) throw new Error(`Drive delete failed: ${res.status}`);
+    },
   };
 };

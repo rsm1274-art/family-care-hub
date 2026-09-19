@@ -19,6 +19,7 @@ const makeMockProvider = (overrides: Partial<CloudProvider> = {}): CloudProvider
     writeFile: vi.fn(async (name: string, content: string) => {
       files.set(name, { content, modifiedTime: new Date().toISOString() });
     }),
+    deleteFile: vi.fn(async (name: string) => { files.delete(name); }),
     ...overrides,
   };
 };

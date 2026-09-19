@@ -7,7 +7,7 @@ import { PersonDetail } from './components/PersonDetail';
 import { Scanner } from './components/Scanner';
 import { Settings } from './components/Settings';
 import { Terms } from './components/Terms';
-import { X, Save, Camera, Trash2, Maximize2, Download } from 'lucide-react';
+import { X, Save, Camera, Trash2, Maximize2, Download, CloudOff } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { cryptoService, VAULT_KEYS } from './services/cryptoService';
 import { loadSecure, sealSecure, commitSealed, checkStoragePersistence, requestPersistentStorage } from './services/secureStorage';
@@ -72,6 +72,7 @@ const App: React.FC = () => {
   const [showJoinVault, setShowJoinVault] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [lastCloudSync, setLastCloudSync] = useState<string | null>(null);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   const triggerBackupReminder = (message = 'Records updated. A quick backup will keep your changes safe.') => {
     setBackupReminder({ show: true, message });
@@ -153,7 +154,10 @@ const App: React.FC = () => {
               [STORAGE_KEY_DOCS]: sealedDocs,
             })
             .then(() => setLastCloudSync(new Date().toISOString()))
-            .catch((e) => console.error('Cloud sync push failed', e));
+            .catch((e) => {
+              console.error('Cloud sync push failed', e);
+              setSyncNotice("Couldn't sync your latest changes to Google Drive. They're saved on this device and will sync once the connection is working again.");
+            });
         }
       } catch (e) {
         console.error("Failed to save to local storage", e);
@@ -203,6 +207,7 @@ const App: React.FC = () => {
         setLastCloudSync(new Date().toISOString());
       } catch (e) {
         console.error('Cloud sync pull failed', e);
+        setSyncNotice("Couldn't check Google Drive for other caregivers' updates. Showing what's saved on this device.");
       }
     }
 
@@ -396,7 +401,7 @@ const App: React.FC = () => {
       if (cryptoService.isUnlocked()) await loadRecords();
     } catch (e) {
       console.error('Google Drive connection failed', e);
-      alert('Could not connect to Google Drive. Please try again.');
+      setSyncNotice('Could not connect to Google Drive. Please try again.');
     } finally {
       setCloudSyncing(false);
     }
@@ -413,7 +418,7 @@ const App: React.FC = () => {
   const handleInviteCaregiver = async (): Promise<void> => {
     const provider = cloudSync.getProvider();
     if (!provider) {
-      alert('Connect Google Drive first.');
+      setSyncNotice('Connect Google Drive first.');
       return;
     }
     try {
@@ -422,14 +427,16 @@ const App: React.FC = () => {
       setInviteCode(code);
     } catch (e) {
       console.error('Failed to create invite', e);
-      alert('Could not create an invite. Please try again.');
+      setSyncNotice('Could not create an invite. Please try again.');
     }
   };
 
   // Reads the invite left by handleInviteCaregiver above and joins this
   // device to that same DEK -- from here on this device's ciphertext is
   // decryptable by every other caregiver on the shared folder, and theirs by
-  // this one.
+  // this one. The invite is then deleted so it cannot be replayed by anyone
+  // who later gets both the folder and the (out-of-band) code -- best-effort,
+  // since a failed delete still leaves the vault correctly joined.
   const handleJoinVault = async (code: string, pin: string): Promise<string | null> => {
     const provider = cloudSync.getProvider();
     if (!provider) return 'Connect Google Drive first.';
@@ -439,6 +446,7 @@ const App: React.FC = () => {
       const slot = JSON.parse(raw);
       setRecoveryCode(await cryptoService.joinWithInvite(slot, code, pin));
       setShowJoinVault(false);
+      provider.deleteFile(INVITE_FILE_NAME).catch((e) => console.error('Failed to retire invite', e));
       return null;
     } catch (e) {
       console.error('Join vault failed', e);
@@ -1102,6 +1110,27 @@ const App: React.FC = () => {
               <X className="w-4 h-4" />
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Cloud Sync Notice Toast -- non-blocking, unlike the alert()s this
+          replaced; a sync hiccup should not interrupt whatever the caregiver
+          was doing. */}
+      {syncNotice && !isViewLocked && (
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-50 bg-surface border border-amber-500/40 shadow-2xl rounded-2xl p-4 flex items-center justify-between gap-3 animate-slide-up backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-amber-500/10 rounded-xl text-amber-500 shrink-0">
+              <CloudOff className="w-5 h-5" />
+            </div>
+            <p className="text-sm font-semibold text-mainText">{syncNotice}</p>
+          </div>
+          <button
+            onClick={() => setSyncNotice(null)}
+            className="p-1.5 text-mutedText hover:text-mainText rounded-lg transition-colors shrink-0"
+            aria-label="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

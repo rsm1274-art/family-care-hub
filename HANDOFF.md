@@ -109,16 +109,37 @@ Cloud sync only activates when `VITE_GOOGLE_CLIENT_ID` is set (see README).
 
 ## 5. Next Session Roadmap & Recommendations
 
-1. Add an iCloud (CloudKit JS) `CloudProvider` implementation as the second
-   supported provider (README lists it as a v2.0 goal for iPhone-only
-   families).
-2. Surface sync errors in the UI beyond `alert()` -- a small inline status
-   (e.g. "sync failed, will retry") rather than a blocking dialog.
-3. Manual end-to-end test with a real Google Cloud OAuth client ID: two
-   devices, one inviting the other via the new invite flow, confirm a record
-   added on one appears on the other after unlock, and confirm revoking
-   Drive folder access on Google's side actually cuts the second device off.
-4. Consider invite expiry/retirement: `fch_invite` currently sits in the
-   Drive folder indefinitely after being created, reusable by anyone who
-   later gets both folder access and the (out-of-band) code. Retiring it
-   after first use (like the recovery code already does) would tighten this.
+Two of the four items from the previous handoff are done:
+
+- **Sync errors are no longer silent or blocking.** A failed push/pull, a
+  failed connect, or a failed invite creation now sets a dismissible
+  `syncNotice` banner (bottom-right, same visual pattern as the existing
+  backup-reminder toast) instead of `console.error`-only or a blocking
+  `alert()`. `CloudProvider.deleteFile` was added to support this work's
+  sibling item below and is also usable for future cleanup needs.
+- **The invite is now retired after use.** `handleJoinVault` in `App.tsx`
+  deletes `fch_invite` from the shared Drive folder (best-effort, via the
+  new `CloudProvider.deleteFile`) immediately after a successful join, so it
+  cannot be replayed by someone who later gets both folder access and the
+  out-of-band code.
+
+Two remain, and both need something from the project owner rather than more
+code:
+
+1. **iCloud provider — needs a decision, not just code.** CloudKit JS
+   requires the *deploying* developer to register an Apple Developer Program
+   membership ($99/year) to create the CloudKit container the web app talks
+   to -- unlike Google Cloud OAuth credentials, which are free. That is a
+   real ongoing cost for whoever hosts this app, which conflicts with the
+   "no cost to me, ever" constraint this design was built around. Do not
+   implement iCloud until the project owner decides whether to accept that
+   cost, drop iCloud, or look at OneDrive/Dropbox instead (both have free
+   app-registration tiers, closer to Google's).
+2. **Manual end-to-end test — needs a real Google Cloud OAuth client ID.**
+   This cannot be exercised in CI or by an agent without one: create a
+   Google Cloud project, an OAuth 2.0 Web application client ID (see
+   README → "Cloud sync" for the exact steps), set `VITE_GOOGLE_CLIENT_ID`,
+   and test two devices/accounts: one invites the other via the new flow,
+   confirm a record added on one appears on the other after unlock, and
+   confirm revoking Drive folder access on Google's side actually cuts the
+   second device off.

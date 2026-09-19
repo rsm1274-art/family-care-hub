@@ -22,4 +22,6 @@ export interface CloudProvider {
   /** Returns null if the file does not exist in the linked folder. */
   readFile(name: string): Promise<string | null>;
   writeFile(name: string, content: string): Promise<void>;
+  /** No-op if the file does not exist. */
+  deleteFile(name: string): Promise<void>;
 }
